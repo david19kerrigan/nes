@@ -26,7 +26,7 @@ pub struct Cpu {
     n: bool,
     // misc
     instr: Instructions,
-    ram: u16,
+    ram: usize,
     st: Vec<u16>,
 }
 
@@ -106,27 +106,35 @@ impl Cpu {
         self.flag_negative(memory[self.ram as usize]);
     }
 
-    pub fn AND(&mut self) {
-        self.a |= self.ram as u8;
+    pub fn ANDM(&mut self, memory: &mut Vec<u8>) {
+        self.AND(memory[self.ram]);
+    }
+
+    pub fn AND(&mut self, val: u8) {
+        self.a |= val;
         self.flag_zero(self.a);
         self.flag_negative(self.a);
     }
 
-    pub fn ADC(&mut self) {
-        let (val, overflow1) = (self.ram as u8).overflowing_add(self.c as u8);
-        let (result, overflow2) = self.a.overflowing_add(val);
+    pub fn ADCM(&mut self, memory: &mut Vec<u8>) {
+        self.ADC(memory[self.ram]);
+    }
+
+    pub fn ADC(&mut self, val: u8) {
+        let (temp, overflow1) = val.overflowing_add(self.c as u8);
+        let (result, overflow2) = self.a.overflowing_add(temp);
         self.a = result;
         self.flag_zero(result);
         self.flag_carry(overflow1 || overflow2);
         self.flag_negative(result);
-        self.flag_overflow(result, self.ram as u8);
+        self.flag_overflow(result, val);
     }
 
     // --------------- ADDRESSING --------------------
 
-    pub fn IMM(&mut self, memory: &mut Vec<u8>) -> usize {
+    pub fn IMM(&mut self, memory: &mut Vec<u8>) -> u8 {
         self.pc += 2;
-        memory[self.pc - 1] as usize
+        memory[self.pc - 1]
     }
 
     pub fn ZP(&mut self, memory: &mut Vec<u8>) -> usize {
@@ -173,26 +181,25 @@ impl Cpu {
         self.pc += 1;
     }
 
-    pub fn REL(&mut self, memory: &mut Vec<u8>, can_branch: bool) -> (u16, u8) {
+    pub fn REL(&mut self, memory: &mut Vec<u8>, can_branch: bool) -> (usize, u8) {
         self.pc += 2;
         if (self.pc as u16).overflowing_add(self.ram as u16).1 && can_branch {
-            (memory[self.pc - 1] as u16, 4)
+            (memory[self.pc - 1] as usize, 4)
         } else if can_branch {
-            (memory[self.pc - 1] as u16, 3)
+            (memory[self.pc - 1] as usize, 3)
         } else {
-            (0 as u16, 2)
+            (0, 2)
         }
     }
 
     pub fn execute_instruction(&mut self, memory: &mut Vec<u8>) {
         match &self.instr {
-            Instructions::ADC => self.ADC(),
+            Instructions::ADC => self.ADCM(memory),
             Instructions::BXX => self.BXX(),
             Instructions::BIT => self.BIT(memory),
-            Instructions::AND => self.AND(),
+            Instructions::AND => self.ANDM(memory),
             Instructions::ASLM => self.ASLM(memory),
             Instructions::ASLA => self.ASLA(),
-            Instructions::NOP => self.pc += 1,
             Instructions::NEW => (),
             default => panic!("invalid instruction"),
         }
@@ -221,7 +228,7 @@ impl Cpu {
             // --------------- BIT --------------------
             0x24 => {
                 self.instr = Instructions::BIT;
-                self.ram = self.ZP(memory) as u16;
+                self.ram = self.ZP(memory);
                 3
             }
             // --------------- BRANCH --------------------
@@ -276,17 +283,17 @@ impl Cpu {
             // --------------- ASL --------------------
             0x0E => {
                 self.instr = Instructions::ASLM;
-                self.ram = self.ABS(memory) as u16;
+                self.ram = self.ABS(memory);
                 6
             }
             0x16 => {
                 self.instr = Instructions::ASLM;
-                self.ram = self.ZPX(memory) as u16;
+                self.ram = self.ZPX(memory);
                 6
             }
             0x06 => {
                 self.instr = Instructions::ASLM;
-                self.ram = self.ZP(memory) as u16;
+                self.ram = self.ZP(memory);
                 5
             }
             0x0A => {
@@ -298,98 +305,93 @@ impl Cpu {
             0x31 => {
                 let (val, overflow) = self.IDY(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 5 + overflow as u8
             }
             0x21 => {
-                let val = self.IDX(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = self.IDX(memory);
                 6
             }
             0x39 => {
                 let (val, overflow) = self.ABY(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4 + overflow as u8
             }
             0x3D => {
                 let (val, overflow) = self.ABX(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4 + overflow as u8
             }
             0x2D => {
                 let val = self.ABS(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4
             }
             0x35 => {
                 let val = self.ZPX(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4
             }
             0x25 => {
                 let val = self.ZP(memory);
                 self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 3
             }
             0x29 => {
+                self.instr = Instructions::NEW;
                 let val = self.IMM(memory);
-                self.instr = Instructions::AND;
-                self.ram = memory[val] as u16;
+                self.AND(val);
                 2
             }
             // --------------- ADC --------------------
             0x71 => {
                 let (val, overflow) = self.IDY(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 5 + overflow as u8
             }
             0x61 => {
-                let val = self.IDX(memory);
+                self.ram = self.IDX(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
                 6
             }
             0x79 => {
                 let (val, overflow) = self.ABY(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4 + overflow as u8
             }
             0x7D => {
                 let (val, overflow) = self.ABX(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
+                self.ram = val;
                 4 + overflow as u8
             }
             0x6D => {
-                let val = self.ABS(memory);
+                self.ram = self.ABS(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
                 4
             }
             0x75 => {
-                let val = self.ZPX(memory);
+                self.ram = self.ZPX(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
                 4
             }
             0x65 => {
-                let val = self.ZP(memory);
+                self.ram = self.ZP(memory);
                 self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
                 3
             }
             0x69 => {
                 let val = self.IMM(memory);
-                self.instr = Instructions::ADC;
-                self.ram = memory[val] as u16;
+                self.instr = Instructions::NEW;
+                self.ADC(val);
                 2
             }
             default => panic!("unknown opcode"),
