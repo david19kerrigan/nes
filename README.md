@@ -1,2 +1,4 @@
 # nes
-i  can beat castlevania 1 blindfolded in under 30 mins
+1. drink two liters of soymilk
+2. play castlevania 1 on 2x speed
+3. win
