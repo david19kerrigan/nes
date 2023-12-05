@@ -5,14 +5,14 @@ use cpu::Cpu;
 fn main() {
     let mut memory = &mut vec![1 as u8];
     let mut cpu = Cpu::new();
-    let mut delay = 1;
+    let mut delay = 0;
 
     loop {
-        if delay == 1 { // Reading the instruction takes one cycle
+        if delay == 1 {
             cpu.execute_instruction(&mut memory);
-            delay = cpu.execute_cycle(&mut memory);
-        } else {
-            delay -= 1;
+        } else if delay == 0 {
+            delay = cpu.load_instruction(&mut memory);
         }
+        delay -= 1;
     }
 }

@@ -1,5 +1,5 @@
 enum Instructions {
-    NEW,
+    NONE,
     ADC,
     ASLA,
     ASLM,
@@ -7,6 +7,7 @@ enum Instructions {
     NOP,
     BXX,
     BIT,
+    CMP,
 }
 
 pub struct Cpu {
@@ -45,7 +46,7 @@ impl Cpu {
             b: false,
             o: false,
             n: false,
-            instr: Instructions::NEW,
+            instr: Instructions::NONE,
             ram: 0,
             st: vec![],
         }
@@ -81,15 +82,26 @@ impl Cpu {
 
     // --------------- OPERATIONS --------------------
 
+    pub fn CMPM(&mut self, memory: &mut Vec<u8>) {
+        self.CMP(memory[self.ram]);
+    }
+
+    pub fn CMP(&mut self, val: u8) {
+        let val = self.a - val;
+        self.flag_negative(val);
+        self.flag_carry(val >= 0);
+        self.flag_zero(val);
+    }
+
     pub fn BIT(&mut self, memory: &mut Vec<u8>) {
-        let val = memory[self.ram as usize] & self.a;
+        let val = memory[self.ram] & self.a;
         self.flag_zero(val);
         self.flag_negative(val);
         self.o = val & 0x40 == 1;
     }
 
-    pub fn BXX(&mut self) {
-        self.pc = (self.pc as u16).wrapping_add_signed(self.ram as i16) as usize;
+    pub fn BXX(&mut self, val: isize) {
+        self.pc = (self.pc).wrapping_add_signed(val) as usize;
     }
 
     pub fn ASLA(&mut self) {
@@ -97,6 +109,7 @@ impl Cpu {
         self.a <<= 1;
         self.flag_zero(self.a);
         self.flag_negative(self.a);
+        self.pc += 1;
     }
 
     pub fn ASLM(&mut self, memory: &mut Vec<u8>) {
@@ -177,53 +190,102 @@ impl Cpu {
         (memory[val as usize] as usize, overflow)
     }
 
-    pub fn ACC(&mut self) {
-        self.pc += 1;
-    }
-
-    pub fn REL(&mut self, memory: &mut Vec<u8>, can_branch: bool) -> (usize, u8) {
+    pub fn REL(&mut self, memory: &mut Vec<u8>, can_branch: bool) -> (isize, u8) {
         self.pc += 2;
-        if (self.pc as u16).overflowing_add(self.ram as u16).1 && can_branch {
-            (memory[self.pc - 1] as usize, 4)
+        let val = memory[self.pc - 1] as isize;
+        if self.pc.overflowing_add_signed(val).1 && can_branch {
+            (val, 4)
         } else if can_branch {
-            (memory[self.pc - 1] as usize, 3)
+            (val, 3)
         } else {
             (0, 2)
         }
     }
 
+    // --------------- END --------------------
+
     pub fn execute_instruction(&mut self, memory: &mut Vec<u8>) {
         match &self.instr {
             Instructions::ADC => self.ADCM(memory),
-            Instructions::BXX => self.BXX(),
             Instructions::BIT => self.BIT(memory),
+            Instructions::CMP => self.CMPM(memory),
             Instructions::AND => self.ANDM(memory),
             Instructions::ASLM => self.ASLM(memory),
-            Instructions::ASLA => self.ASLA(),
-            Instructions::NEW => (),
+            Instructions::NONE => (),
             default => panic!("invalid instruction"),
         }
+        self.instr = Instructions::NONE;
     }
 
-    pub fn execute_cycle(&mut self, memory: &mut Vec<u8>) -> u8 {
+    pub fn load_instruction(&mut self, memory: &mut Vec<u8>) -> u8 {
         let opcode = memory[self.pc];
         match opcode {
             // --------------- COMPARE --------------------
+            0xD1 => {
+                self.instr = Instructions::CMP;
+                let (val, overflow) = self.IDY(memory);
+                self.ram = val;
+                5 + overflow as u8
+            }
+            0xC1 => {
+                self.instr = Instructions::CMP;
+                self.ram = self.IDX(memory);
+                6
+            }
+            0xD9 => {
+                self.instr = Instructions::CMP;
+                let (val, overflow) = self.ABY(memory);
+                self.ram = val;
+                4 + overflow as u8
+            }
+            0xDD => {
+                self.instr = Instructions::CMP;
+                let (val, overflow) = self.ABX(memory);
+                self.ram = val;
+                4 + overflow as u8
+            }
+            0xCD => {
+                self.instr = Instructions::CMP;
+                self.ram = self.ABS(memory);
+                4
+            }
+            0xD5 => {
+                self.instr = Instructions::CMP;
+                self.ram = self.ZPX(memory);
+                4
+            }
+            0xC5 => {
+                self.instr = Instructions::CMP;
+                self.ram = self.ZP(memory);
+                3
+            }
+            0xC9 => {
+                let val = self.IMM(memory);
+                1 // 2
+            }
             // --------------- CLEAR --------------------
+            0xB8 => {
+                self.o = false;
+                1 // 2
+            }
+            0x58 => {
+                self.i = false;
+                1 // 2
+            }
             0xD8 => {
                 self.d = false;
-                2
+                1 // 2
             }
             0x18 => {
-                self.z = false;
-                2
+                self.c = false;
+                1 // 2
             }
             // --------------- BRK --------------------
             0x00 => {
                 self.st.push(self.pc as u16);
                 self.pc = (memory[0xFFFE as usize] | memory[0xFFFF as usize] << 8) as usize;
                 self.b = true;
-                7
+                6 // 7
             }
             // --------------- BIT --------------------
             0x24 => {
@@ -233,52 +295,44 @@ impl Cpu {
             }
             // --------------- BRANCH --------------------
             0x70 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, self.o);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0x50 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, !self.o);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0x10 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, !self.n);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0xD0 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, !self.z);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0x30 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, self.n);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0xF0 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, self.z);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0xB0 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, self.c);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             0x90 => {
-                self.instr = Instructions::BXX;
                 let (val, cycles) = self.REL(memory, !self.c);
-                self.ram = val;
-                cycles
+                self.BXX(val);
+                cycles - 1
             }
             // --------------- ASL --------------------
             0x0E => {
@@ -297,14 +351,13 @@ impl Cpu {
                 5
             }
             0x0A => {
-                self.instr = Instructions::ASLA;
-                self.ACC();
-                2
+                self.ASLA();
+                1 // 2
             }
             // --------------- AND --------------------
             0x31 => {
-                let (val, overflow) = self.IDY(memory);
                 self.instr = Instructions::AND;
+                let (val, overflow) = self.IDY(memory);
                 self.ram = val;
                 5 + overflow as u8
             }
@@ -314,85 +367,83 @@ impl Cpu {
                 6
             }
             0x39 => {
-                let (val, overflow) = self.ABY(memory);
                 self.instr = Instructions::AND;
+                let (val, overflow) = self.ABY(memory);
                 self.ram = val;
                 4 + overflow as u8
             }
             0x3D => {
-                let (val, overflow) = self.ABX(memory);
                 self.instr = Instructions::AND;
+                let (val, overflow) = self.ABX(memory);
                 self.ram = val;
                 4 + overflow as u8
             }
             0x2D => {
-                let val = self.ABS(memory);
                 self.instr = Instructions::AND;
+                let val = self.ABS(memory);
                 self.ram = val;
                 4
             }
             0x35 => {
-                let val = self.ZPX(memory);
                 self.instr = Instructions::AND;
+                let val = self.ZPX(memory);
                 self.ram = val;
                 4
             }
             0x25 => {
-                let val = self.ZP(memory);
                 self.instr = Instructions::AND;
+                let val = self.ZP(memory);
                 self.ram = val;
                 3
             }
             0x29 => {
-                self.instr = Instructions::NEW;
                 let val = self.IMM(memory);
                 self.AND(val);
-                2
+                1 // 2
             }
             // --------------- ADC --------------------
             0x71 => {
-                let (val, overflow) = self.IDY(memory);
                 self.instr = Instructions::ADC;
+                let (val, overflow) = self.IDY(memory);
                 self.ram = val;
                 5 + overflow as u8
             }
             0x61 => {
-                self.ram = self.IDX(memory);
                 self.instr = Instructions::ADC;
+                self.ram = self.IDX(memory);
                 6
             }
             0x79 => {
-                let (val, overflow) = self.ABY(memory);
                 self.instr = Instructions::ADC;
+                let (val, overflow) = self.ABY(memory);
                 self.ram = val;
                 4 + overflow as u8
             }
             0x7D => {
-                let (val, overflow) = self.ABX(memory);
                 self.instr = Instructions::ADC;
+                let (val, overflow) = self.ABX(memory);
                 self.ram = val;
                 4 + overflow as u8
             }
             0x6D => {
-                self.ram = self.ABS(memory);
                 self.instr = Instructions::ADC;
+                self.ram = self.ABS(memory);
                 4
             }
             0x75 => {
-                self.ram = self.ZPX(memory);
                 self.instr = Instructions::ADC;
+                self.ram = self.ZPX(memory);
                 4
             }
             0x65 => {
-                self.ram = self.ZP(memory);
                 self.instr = Instructions::ADC;
+                self.ram = self.ZP(memory);
                 3
             }
             0x69 => {
                 let val = self.IMM(memory);
-                self.instr = Instructions::NEW;
                 self.ADC(val);
-                2
+                1 // 2
             }
             default => panic!("unknown opcode"),
         }
