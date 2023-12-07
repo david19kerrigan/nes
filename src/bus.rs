@@ -49,18 +49,25 @@ impl Bus {
         combine_low_high(self.read_usize(addr - 2), self.read_usize(addr - 1))
     }
 
+    // Does addressing mode Rel cross the page?
+    pub fn cross_rel(&mut self, pc: usize) -> u8 {
+        let low = self.read_usize(pc + 1);
+        (pc as u8).overflowing_add(low).1 as u8
+    }
+
     // Does addressing mode Indexed Y cross the page?
     pub fn cross_idy(&mut self, pc: usize, offset: u8) -> u8 {
-        let zp = self.read_8(self.read_usize(pc));
+        let low = self.read_usize(pc + 1);
+        let zp = self.read_8(low);
         combine_low_high(zp, zp + 1)
             .overflowing_add(offset as u16)
             .1 as u8
     }
 
     // Does addressing mode Indexed X cross the page?
-    pub fn cross_abs(&mut self, pc_first: usize, pc_second: usize, offset: u8) -> u8 {
-        self.read_16(self.read_usize(pc_first), self.read_usize(pc_second))
-            .overflowing_add(offset)
-            .1 as u8
+    pub fn cross_abs(&mut self, pc: usize, offset: u8) -> u8 {
+        let low = self.read_usize(pc + 1);
+        let high = self.read_usize(pc + 2);
+        self.read_16(low, high).overflowing_add(offset).1 as u8
     }
 }

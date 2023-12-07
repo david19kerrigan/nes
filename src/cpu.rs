@@ -1,9 +1,9 @@
 use crate::util::*;
 use crate::Bus;
 
-const ERR_INSTR: String = String::from("Invalid Instruction");
-const ERR_OP: String = String::from("Invalid Instruction");
-const ERR_ADDR: String = String::from("Invalid Addressing Mode");
+const ERR_INSTR: &str = "Invalid Instruction";
+const ERR_OP: &str = "Invalid Instruction";
+const ERR_ADDR: &str = "Invalid Addressing Mode";
 
 #[rustfmt::skip]
 #[derive(PartialEq)]
@@ -83,21 +83,13 @@ impl Cpu {
         }
     }
 
-    pub fn flag_overflow(&mut self, a: u8, b: u8) {
-        if (self.a > 0 && b > 0 && (self.a as i8) < 0)
-            || (self.a < 0 && b < 0 && (self.a as i8) > 0)
-        {
+    pub fn flag_overflow(&mut self, a: u8, b: u8, c: u8) {
+        if (self.a > 0 && b > 0 && (c as i8) < 0) || (self.a < 0 && b < 0 && (c as i8) > 0) {
             self.o = true;
         }
     }
 
     // --------------- OPERATIONS --------------------
-
-    //pub fn EOR(&mut self, val: u8) {
-    //    self.a ^= val;
-    //    self.flag_zero(self.a);
-    //    self.flag_negative(self.a);
-    //}
 
     //pub fn INC(&mut self, memory: &mut Vec<u8>) {
     //    memory[self.ram] -= 1;
@@ -131,25 +123,6 @@ impl Cpu {
     //    self.pc = (self.pc).wrapping_add_signed(val) as usize;
     //}
 
-    //pub fn ASLA(&mut self) {
-    //    self.flag_carry(self.a & 0x80 == 1);
-    //    self.a <<= 1;
-    //    self.flag_zero(self.a);
-    //    self.flag_negative(self.a);
-    //    self.pc += 1;
-    //}
-
-    pub fn ADC_SBC(&mut self, bus: &mut Bus, target_addr: usize) {
-        let val = bus.read_usize(target_addr);
-        let (val_with_carry, overflow1) = val.overflowing_add(self.c as u8);
-        let (result, overflow2) = self.a.overflowing_add(val_with_carry);
-        self.a = result;
-        self.flag_zero(self.a);
-        self.flag_negative(self.a);
-        self.flag_carry(overflow1 || overflow2);
-        self.flag_overflow(self.a, val_with_carry);
-    }
-
     // --------------- ADDRESSING --------------------
 
     pub fn ID(&mut self, memory: &mut Vec<u8>) -> (usize) {
@@ -174,58 +147,56 @@ impl Cpu {
     #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
         let target_addr = match self.addr {
-            Addressing::ACC => 0,
-            Addressing::IMM => self.pc - 1 as usize,
-            Addressing::ZPG => bus.read_single(self.pc) as usize,
-            Addressing::ZPX => bus.read_single(self.pc).wrapping_add(self.x) as usize,
-            Addressing::ABS => bus.read_double(self.pc) as usize,
-            Addressing::ABX => bus.read_double(self.pc).wrapping_add(self.x as u16) as usize,
-            Addressing::ABY => bus.read_double(self.pc).wrapping_add(self.y as u16) as usize,
+            Addressing::ACC => { self.pc += 1; 0 },
+            Addressing::IMM => { self.pc += 2; self.pc - 1 as usize },
+            Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as usize },
+            Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as usize },
+            Addressing::ABS => { self.pc += 3; bus.read_double(self.pc) as usize } ,
+            Addressing::ABX => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.x as u16) as usize },
+            Addressing::ABY => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.y as u16) as usize },
             Addressing::IDX => {
+                self.pc += 2;
                 let zp = bus.read_single(self.pc).wrapping_add(self.x);
                 combine_low_high(zp, zp + 1) as usize
             }
             Addressing::IDY => {
+                self.pc += 2;
                 let zp = bus.read_single(self.pc);
                 combine_low_high(zp, zp + 1).wrapping_add(self.y as u16) as usize
             }
+            Addressing::REL => { self.pc += 2; self.pc - 1 as usize},
             _ => panic!("{}", ERR_ADDR),
         };
 
         let mut target_val = bus.read_usize(target_addr);
+
         match self.instr {
             Instructions::ADC | Instructions::SBC => {
                 let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!("{}", ERR_INSTR) };
                 let (val_with_carry, overflow1) = op(target_val, self.c as u8);
                 let (result, overflow2) =  op(self.a, val_with_carry);
+                self.flag_zero(result); self.flag_negative(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow(self.a, val_with_carry, result);
                 self.a = result;
-                self.flag_zero(self.a);
-                self.flag_negative(self.a);
-                self.flag_carry(overflow1 || overflow2);
-                self.flag_overflow(self.a, val_with_carry);
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
                 let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, _ => panic!("{}", ERR_INSTR) };
                 self.a = op(self.a, target_val);
-                self.flag_zero(self.a);
-                self.flag_negative(self.a);
+                self.flag_zero(self.a); self.flag_negative(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
-                let val: u8;
-                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL => &u8_shl, Instructions::LSR => &u8_shr, Instructions::ROR  => &u8_shr, Instructions::ROL => &u8_shl, _ => panic!("{}", ERR_INSTR) };
+                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!("{}", ERR_INSTR) };
                 if self.addr == Addressing::ACC {
                     self.flag_carry(self.a & 0x80 == 1);
                     self.a = op(self.a);
                     match self.instr { Instructions::ROL | Instructions::ROR => self.a |= self.c as u8, _ => () };
-                    val = self.a;
+                    self.flag_zero(self.a); self.flag_negative(self.a);
                 } else {
                     self.flag_carry(target_val & 0x80 == 1);
-                    match self.instr { Instructions::ROL | Instructions::ROR => target_val |= self.c as u8, _ => () };
-                    bus.write_usize(target_addr, op(target_val));
-                    val = bus.read_usize(target_addr);
+                    let mut modified_val = op(target_val);
+                    match self.instr { Instructions::ROL | Instructions::ROR => modified_val |= self.c as u8, _ => () };
+                    bus.write_usize(target_addr, modified_val);
+                    self.flag_zero(modified_val); self.flag_negative(modified_val);
                 }
-                self.flag_zero(val);
-                self.flag_negative(val);
             }
             _ => panic!("{}", ERR_OP),
         }
@@ -234,15 +205,40 @@ impl Cpu {
     #[rustfmt::skip]
     pub fn load_instruction(&mut self, bus: &mut Bus) -> u8 {
         let cycles: u8;
+
         match bus.read_usize(self.pc) {
-            0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2; self.pc += 2},
-            0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3; self.pc += 2},
-            0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4; self.pc += 2},
-            0x6D => {self.instr = Instructions::ADC; self.addr = Addressing::ABS; cycles = 4; self.pc += 2},
-            0x7D => {self.instr = Instructions::ADC; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc + 1, self.pc + 2, self.x); self.pc += 3},
-            0x79 => {self.instr = Instructions::ADC; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc + 1, self.pc + 2, self.y); self.pc += 3},
-            0x61 => {self.instr = Instructions::ADC; self.addr = Addressing::IDX; cycles = 6; self.pc += 2},
-            0x71 => {self.instr = Instructions::ADC; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc + 1, self.y); self.pc += 2},
+            0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
+            0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3},
+            0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4},
+            0x6D => {self.instr = Instructions::ADC; self.addr = Addressing::ABS; cycles = 4},
+            0x7D => {self.instr = Instructions::ADC; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+            0x79 => {self.instr = Instructions::ADC; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc, self.y)},
+            0x61 => {self.instr = Instructions::ADC; self.addr = Addressing::IDX; cycles = 6},
+            0x71 => {self.instr = Instructions::ADC; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc, self.y)},
+
+            0x29 => {self.instr = Instructions::AND; self.addr = Addressing::IMM; cycles = 2},
+            0x25 => {self.instr = Instructions::AND; self.addr = Addressing::ZPG; cycles = 3},
+            0x35 => {self.instr = Instructions::AND; self.addr = Addressing::ZPX; cycles = 4},
+            0x2D => {self.instr = Instructions::AND; self.addr = Addressing::ABS; cycles = 4},
+            0x3D => {self.instr = Instructions::AND; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+            0x39 => {self.instr = Instructions::AND; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc, self.y)},
+            0x21 => {self.instr = Instructions::AND; self.addr = Addressing::IDX; cycles = 6},
+            0x31 => {self.instr = Instructions::AND; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc, self.y)},
+
+            0x0A => {self.instr = Instructions::ASL; self.addr = Addressing::ACC; cycles = 2},
+            0x06 => {self.instr = Instructions::ASL; self.addr = Addressing::ZPG; cycles = 5},
+            0x16 => {self.instr = Instructions::ASL; self.addr = Addressing::ZPX; cycles = 6},
+            0x0E => {self.instr = Instructions::ASL; self.addr = Addressing::ABS; cycles = 6},
+            0x1E => {self.instr = Instructions::ASL; self.addr = Addressing::ABX; cycles = 7},
+
+            0x90 => {self.instr = Instructions::BCC; self.addr = Addressing::REL; cycles = 2 + !self.c as u8 + bus.cross_rel(self.pc)},
+            0xB0 => {self.instr = Instructions::BCS; self.addr = Addressing::REL; cycles = 2 + self.c as u8 + bus.cross_rel(self.pc)},
+            0xF0 => {self.instr = Instructions::BEQ; self.addr = Addressing::REL; cycles = 2 + self.z as u8 + bus.cross_rel(self.pc)},
+            0x30 => {self.instr = Instructions::BMI; self.addr = Addressing::REL; cycles = 2 + self.n as u8 + bus.cross_rel(self.pc)},
+            0xD0 => {self.instr = Instructions::BNE; self.addr = Addressing::REL; cycles = 2 + !self.z as u8 + bus.cross_rel(self.pc)},
+            0x10 => {self.instr = Instructions::BPL; self.addr = Addressing::REL; cycles = 2 + !self.n as u8 + bus.cross_rel(self.pc)},
+            0x50 => {self.instr = Instructions::BVC; self.addr = Addressing::REL; cycles = 2 + !self.o as u8 + bus.cross_rel(self.pc)},
+            0x70 => {self.instr = Instructions::BVS; self.addr = Addressing::REL; cycles = 2 + self.o as u8 + bus.cross_rel(self.pc)},
             _ => panic!("{}", ERR_OP),
         }
         cycles
