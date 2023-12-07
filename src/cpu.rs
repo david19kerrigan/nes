@@ -87,19 +87,19 @@ impl Cpu {
         self.b = break_bool;
     }
 
-    pub fn flag_negative(&mut self, val: u8) {
+    pub fn flag_negative_from_val(&mut self, val: u8) {
         if (val as i8) < 0 {
             self.n = true;
         }
     }
 
-    pub fn flag_zero(&mut self, val: u8) {
+    pub fn flag_zero_from_val(&mut self, val: u8) {
         if val == 0 {
             self.z = true;
         }
     }
 
-    pub fn flag_overflow_adding(&mut self, a: u8, b: u8, c: u8) {
+    pub fn flag_overflow_from_vals(&mut self, a: u8, b: u8, c: u8) {
         if (self.a > 0 && b > 0 && (c as i8) < 0) || (self.a < 0 && b < 0 && (c as i8) > 0) {
             self.o = true;
         }
@@ -110,22 +110,22 @@ impl Cpu {
     //pub fn INC(&mut self, memory: &mut Vec<u8>) {
     //    memory[self.ram] -= 1;
     //    let res = memory[self.ram];
-    //    self.flag_zero(res);
-    //    self.flag_negative(res);
+    //    self.flag_zero_from_val(res);
+    //    self.flag_negative_from_val(res);
     //}
 
     //pub fn DEC(&mut self, memory: &mut Vec<u8>) {
     //    memory[self.ram] -= 1;
     //    let res = memory[self.ram];
-    //    self.flag_zero(res);
-    //    self.flag_negative(res);
+    //    self.flag_zero_from_val(res);
+    //    self.flag_negative_from_val(res);
     //}
 
     //pub fn CMP(&mut self, a: u8, val: u8) {
     //    let temp = a - val;
-    //    self.flag_negative(temp);
+    //    self.flag_negative_from_val(temp);
     //    self.flag_carry(temp >= 0);
-    //    self.flag_zero(temp);
+    //    self.flag_zero_from_val(temp);
     //}
 
     // --------------- ADDRESSING --------------------
@@ -133,18 +133,6 @@ impl Cpu {
     pub fn ID(&mut self, memory: &mut Vec<u8>) -> (usize) {
         self.pc += 3;
         (memory[self.pc - 2] as u16 | (memory[self.pc - 1] as u16) << 8) as usize
-    }
-
-    pub fn REL(&mut self, memory: &mut Vec<u8>, can_branch: bool) -> (isize, u8) {
-        self.pc += 2;
-        let val = memory[self.pc - 1] as isize;
-        if self.pc.overflowing_add_signed(val).1 && can_branch {
-            (val, 4)
-        } else if can_branch {
-            (val, 3)
-        } else {
-            (0, 2)
-        }
     }
 
     // --------------- END --------------------
@@ -181,13 +169,13 @@ impl Cpu {
                 let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!("{}", ERR_INSTR) };
                 let (val_with_carry, overflow1) = op(target_val, self.c as u8);
                 let (result, overflow2) =  op(self.a, val_with_carry);
-                self.flag_zero(result); self.flag_negative(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow_adding(self.a, val_with_carry, result);
+                self.flag_zero_from_val(result); self.flag_negative_from_val(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow_from_vals(self.a, val_with_carry, result);
                 self.a = result;
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
                 let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, _ => panic!("{}", ERR_INSTR) };
                 self.a = op(self.a, target_val);
-                self.flag_zero(self.a); self.flag_negative(self.a);
+                self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
                 let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!("{}", ERR_INSTR) };
@@ -195,13 +183,13 @@ impl Cpu {
                     self.flag_carry(self.a & 0x80 == 1);
                     self.a = op(self.a);
                     match self.instr { Instructions::ROL | Instructions::ROR => self.a |= self.c as u8, _ => () };
-                    self.flag_zero(self.a); self.flag_negative(self.a);
+                    self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
                 } else {
                     self.flag_carry(target_val & 0x80 == 1);
                     let mut modified_val = op(target_val);
                     match self.instr { Instructions::ROL | Instructions::ROR => modified_val |= self.c as u8, _ => () };
                     bus.write_usize(target_addr, modified_val);
-                    self.flag_zero(modified_val); self.flag_negative(modified_val);
+                    self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val);
                 }
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
@@ -212,7 +200,7 @@ impl Cpu {
             }
             Instructions::BIT => {
                 let res = target_val & self.a;
-                self.flag_zero(res); self.flag_negative(res); self.flag_overflow(res & 0x40 == 1);
+                self.flag_zero_from_val(res); self.flag_negative_from_val(res); self.flag_overflow(res & 0x40 == 1);
             }
             Instructions::BRK => {
                 self.stack.push(self.pc);
