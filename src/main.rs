@@ -1,18 +1,21 @@
 mod cpu;
+mod bus;
+mod util;
 
 use cpu::Cpu;
+use bus::Bus;
 
 fn main() {
-    let mut memory = &mut vec![1 as u8];
+    let mut bus = Bus::new();
     let mut cpu = Cpu::new();
-    let mut delay = 0;
+    let mut cycles_left = 0;
 
     loop {
-        if delay == 1 {
-            cpu.execute_instruction(&mut memory);
-        } else if delay == 0 {
-            delay = cpu.load_instruction(&mut memory);
+        if cycles_left == 1 {
+            cpu.execute_instruction(&mut bus);
+        } else if cycles_left == 0 {
+            cycles_left = cpu.load_instruction(&mut bus);
         }
-        delay -= 1;
+        cycles_left -= 1;
     }
 }
