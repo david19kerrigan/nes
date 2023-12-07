@@ -1,6 +1,10 @@
 use crate::util::*;
 use crate::Bus;
 
+const ERR_INSTR: String = String::from("Invalid Instruction");
+const ERR_OP: String = String::from("Invalid Instruction");
+const ERR_ADDR: String = String::from("Invalid Addressing Mode");
+
 #[rustfmt::skip]
 #[derive(PartialEq)]
 enum Instructions {
@@ -136,7 +140,7 @@ impl Cpu {
     //}
 
     pub fn ADC_SBC(&mut self, bus: &mut Bus, target_addr: usize) {
-        let val = bus.memory[target_addr];
+        let val = bus.read_usize(target_addr);
         let (val_with_carry, overflow1) = val.overflowing_add(self.c as u8);
         let (result, overflow2) = self.a.overflowing_add(val_with_carry);
         self.a = result;
@@ -182,17 +186,17 @@ impl Cpu {
                 combine_low_high(zp, zp + 1) as usize
             }
             Addressing::IDY => {
-                let zp = bus.read_8(bus.memory[self.pc]);
+                let zp = bus.read_single(self.pc);
                 combine_low_high(zp, zp + 1).wrapping_add(self.y as u16) as usize
             }
-            _ => panic!("invalid address mode"),
+            _ => panic!("{}", ERR_ADDR),
         };
 
+        let mut target_val = bus.read_usize(target_addr);
         match self.instr {
             Instructions::ADC | Instructions::SBC => {
-                let val = bus.memory[target_addr];
-                let op: &dyn Fn(u8, u8) -> (u8, bool) = if self.instr == Instructions::ADC { &u8::overflowing_add } else { &u8::overflowing_sub };
-                let (val_with_carry, overflow1) = op(val, self.c as u8);
+                let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!("{}", ERR_INSTR) };
+                let (val_with_carry, overflow1) = op(target_val, self.c as u8);
                 let (result, overflow2) =  op(self.a, val_with_carry);
                 self.a = result;
                 self.flag_zero(self.a);
@@ -201,38 +205,36 @@ impl Cpu {
                 self.flag_overflow(self.a, val_with_carry);
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
-                let val = bus.memory[target_addr];
-                let op: &dyn Fn(u8, u8) -> (u8) = if self.instr == Instructions::AND { &u8_and } else if self.instr == Instructions::ORA { &u8_or } else { &u8_xor };
-                self.a = op(self.a, val);
+                let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, _ => panic!("{}", ERR_INSTR) };
+                self.a = op(self.a, target_val);
                 self.flag_zero(self.a);
                 self.flag_negative(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
                 let val: u8;
-                let op: &dyn Fn(u8) -> (u8) = if self.instr == Instructions::ASL { &u8_shl } else if self.instr == Instructions::LSR { &u8_shr } else { &u8_shr };
-
-                // Can i do this more efficently?
+                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL => &u8_shl, Instructions::LSR => &u8_shr, Instructions::ROR  => &u8_shr, Instructions::ROL => &u8_shl, _ => panic!("{}", ERR_INSTR) };
                 if self.addr == Addressing::ACC {
                     self.flag_carry(self.a & 0x80 == 1);
                     self.a = op(self.a);
+                    match self.instr { Instructions::ROL | Instructions::ROR => self.a |= self.c as u8, _ => () };
                     val = self.a;
                 } else {
-                    self.flag_carry(bus.memory[target_addr] & 0x80 == 1);
-                    bus.memory[target_addr] = op(bus.memory[target_addr]);
-                    val = bus.memory[target_addr];
-
+                    self.flag_carry(target_val & 0x80 == 1);
+                    match self.instr { Instructions::ROL | Instructions::ROR => target_val |= self.c as u8, _ => () };
+                    bus.write_usize(target_addr, op(target_val));
+                    val = bus.read_usize(target_addr);
                 }
                 self.flag_zero(val);
                 self.flag_negative(val);
             }
-            _ => panic!("invalid instruction"),
+            _ => panic!("{}", ERR_OP),
         }
     }
 
     #[rustfmt::skip]
     pub fn load_instruction(&mut self, bus: &mut Bus) -> u8 {
         let cycles: u8;
-        match bus.memory[self.pc] {
+        match bus.read_usize(self.pc) {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2; self.pc += 2},
             0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3; self.pc += 2},
             0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4; self.pc += 2},
@@ -241,7 +243,7 @@ impl Cpu {
             0x79 => {self.instr = Instructions::ADC; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc + 1, self.pc + 2, self.y); self.pc += 3},
             0x61 => {self.instr = Instructions::ADC; self.addr = Addressing::IDX; cycles = 6; self.pc += 2},
             0x71 => {self.instr = Instructions::ADC; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc + 1, self.y); self.pc += 2},
-            _ => panic!("invalid opcode"),
+            _ => panic!("{}", ERR_OP),
         }
         cycles
     }
