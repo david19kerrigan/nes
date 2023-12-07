@@ -167,6 +167,7 @@ impl Cpu {
 
     // --------------- END --------------------
 
+    #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
         let target_addr = match self.addr {
             Addressing::ACC => 0,
@@ -190,8 +191,9 @@ impl Cpu {
         match self.instr {
             Instructions::ADC | Instructions::SBC => {
                 let val = bus.memory[target_addr];
-                let (val_with_carry, overflow1) = val.overflowing_add(self.c as u8);
-                let (result, overflow2) = self.a.overflowing_add(val_with_carry);
+                let op: &dyn Fn(u8, u8) -> (u8, bool) = if self.instr == Instructions::ADC { &u8::overflowing_add } else { &u8::overflowing_sub };
+                let (val_with_carry, overflow1) = op(val, self.c as u8);
+                let (result, overflow2) =  op(self.a, val_with_carry);
                 self.a = result;
                 self.flag_zero(self.a);
                 self.flag_negative(self.a);
@@ -199,20 +201,26 @@ impl Cpu {
                 self.flag_overflow(self.a, val_with_carry);
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
-                self.a |= bus.memory[target_addr];
+                let val = bus.memory[target_addr];
+                let op: &dyn Fn(u8, u8) -> (u8) = if self.instr == Instructions::AND { &u8_and } else if self.instr == Instructions::ORA { &u8_or } else { &u8_xor };
+                self.a = op(self.a, val);
                 self.flag_zero(self.a);
                 self.flag_negative(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
                 let val: u8;
+                let op: &dyn Fn(u8) -> (u8) = if self.instr == Instructions::ASL { &u8_shl } else if self.instr == Instructions::LSR { &u8_shr } else { &u8_shr };
+
+                // Can i do this more efficently?
                 if self.addr == Addressing::ACC {
                     self.flag_carry(self.a & 0x80 == 1);
-                    self.a <<= 1;
+                    self.a = op(self.a);
                     val = self.a;
                 } else {
                     self.flag_carry(bus.memory[target_addr] & 0x80 == 1);
-                    bus.memory[target_addr] <<= 1;
+                    bus.memory[target_addr] = op(bus.memory[target_addr]);
                     val = bus.memory[target_addr];
+
                 }
                 self.flag_zero(val);
                 self.flag_negative(val);
