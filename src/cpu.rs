@@ -68,33 +68,40 @@ impl Cpu {
 
     // --------------- FLAGS --------------------
 
-    pub fn flag_carry(&mut self, overflow: bool) {
-        if overflow {
-            self.c = true;
-        }
+    pub fn flag_carry(&mut self, carry: bool) {
+        self.c = carry;
     }
 
-    pub fn flag_negative(&mut self, result: u8) {
-        if (result as i8) < 0 {
+    pub fn flag_negative(&mut self, val: u8) {
+        if (val as i8) < 0 {
             self.n = true;
         }
     }
 
-    pub fn flag_zero(&mut self, result: u8) {
-        if result == 0 {
+    pub fn flag_zero(&mut self, val: u8) {
+        if val == 0 {
             self.z = true;
         }
     }
 
-    pub fn flag_overflow(&mut self, result: u8, b: u8) {
-        if (self.a > 0 && b > 0 && (result as i8) < 0)
-            || (self.a < 0 && b < 0 && (result as i8) > 0)
+    pub fn flag_overflow(&mut self, a: u8, b: u8) {
+        if (self.a > 0 && b > 0 && (self.a as i8) < 0)
+            || (self.a < 0 && b < 0 && (self.a as i8) > 0)
         {
             self.o = true;
         }
     }
 
     // --------------- OPERATIONS --------------------
+
+    pub fn add_and_set_flags(&mut self, a: u8, b: u8) -> u8 {
+        let (result, overflow) = a.overflowing_add(b);
+        self.flag_zero(result);
+        self.flag_negative(result);
+        self.flag_carry(overflow);
+        self.flag_overflow(a, b);
+        result
+    }
 
     pub fn EOR(&mut self, val: u8) {
         self.a ^= val;
@@ -177,35 +184,30 @@ impl Cpu {
     // --------------- END --------------------
 
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
-        #[rustfmt::skip]
         let target_addr = match self.addr {
             Addressing::IMM => self.pc - 1 as usize,
-            Addressing::ZPG => bus.memory[self.pc - 1] as usize,
-            Addressing::ZPX => (bus.memory[self.pc - 1].wrapping_add(self.x)) as usize,
-            Addressing::ABS => combine_8(bus.memory[self.pc - 2], bus.memory[self.pc - 1]) as usize,
-            Addressing::ABX => combine_8(bus.memory[self.pc - 2], bus.memory[self.pc - 1]).wrapping_add(self.x as u16) as usize,
-            Addressing::ABY => combine_8(bus.memory[self.pc - 2], bus.memory[self.pc - 1]).wrapping_add(self.y as u16) as usize,
+            Addressing::ZPG => bus.read_single(self.pc) as usize,
+            Addressing::ZPX => bus.read_single(self.pc).wrapping_add(self.x) as usize,
+            Addressing::ABS => bus.read_double(self.pc) as usize,
+            Addressing::ABX => bus.read_double(self.pc).wrapping_add(self.x as u16) as usize,
+            Addressing::ABY => bus.read_double(self.pc).wrapping_add(self.y as u16) as usize,
             Addressing::IDX => {
-                let zp = bus.read_8(bus.memory[self.pc].wrapping_add(self.x));
-                combine_8(zp, zp + 1).wrapping_add(self.x as u16) as usize
-            },
+                let zp = bus.read_single(self.pc).wrapping_add(self.x);
+                combine_low_high(zp, zp + 1) as usize
+            }
             Addressing::IDY => {
                 let zp = bus.read_8(bus.memory[self.pc]);
-                combine_8(zp, zp + 1).wrapping_add(self.y as u16) as usize
-            },
+                combine_low_high(zp, zp + 1).wrapping_add(self.y as u16) as usize
+            }
             _ => panic!("invalid address mode"),
         };
 
         match self.instr {
             Instructions::ADC => {
                 let val = bus.memory[target_addr];
-                let (temp, overflow1) = val.overflowing_add(self.c as u8);
-                let (result, overflow2) = self.a.overflowing_add(temp);
-                self.a = result;
-                self.flag_zero(result);
-                self.flag_carry(overflow1 || overflow2);
-                self.flag_negative(result);
-                self.flag_overflow(result, val);
+                let (val_with_carry, overflow) = val.overflowing_add(self.c as u8);
+                self.a = self.add_and_set_flags(self.a, val_with_carry);
+                self.flag_carry(self.c | overflow);
             }
             _ => (),
         }

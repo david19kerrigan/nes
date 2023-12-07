@@ -10,16 +10,24 @@ impl Bus {
     }
 
     pub fn read_16(&mut self, low: u8, high: u8) -> u8 {
-        self.memory[combine_8(low, high) as usize]
+        self.memory[combine_low_high(low, high) as usize]
     }
 
-    pub fn read_8(&mut self, zp: u8) -> u8 {
-        self.memory[zp as usize]
+    pub fn read_8(&mut self, addr: u8) -> u8 {
+        self.memory[addr as usize]
+    }
+
+    pub fn read_single(&mut self, addr: usize) -> u8 {
+        self.memory[addr - 1]
+    }
+
+    pub fn read_double(&mut self, addr: usize) -> u16 {
+        combine_low_high(self.memory[addr - 2], self.memory[addr - 1])
     }
 
     pub fn cross_idy(&mut self, pc: usize, offset: u8) -> u8 {
         let zp = self.read_8(self.memory[pc]);
-        combine_8(zp, zp + 1).overflowing_add(offset as u16).1 as u8
+        combine_low_high(zp, zp + 1).overflowing_add(offset as u16).1 as u8
     }
 
     pub fn cross_abs(
