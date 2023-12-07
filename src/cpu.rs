@@ -2,7 +2,7 @@ use crate::util::*;
 use crate::Bus;
 
 const ERR_INSTR: &str = "Invalid Instruction";
-const ERR_OP: &str = "Invalid Instruction";
+const ERR_OP: &str = "Invalid Opcode";
 const ERR_ADDR: &str = "Invalid Addressing Mode";
 
 #[rustfmt::skip]
@@ -38,7 +38,7 @@ pub struct Cpu {
     // misc
     instr: Instructions,
     addr: Addressing,
-    stack: Vec<u16>,
+    stack: Vec<usize>,
 }
 
 impl Cpu {
@@ -67,8 +67,24 @@ impl Cpu {
 
     // --------------- FLAGS --------------------
 
+    pub fn flag_interrupt(&mut self, interrupt: bool) {
+        self.i = interrupt;
+    }
+
+    pub fn flag_decimal(&mut self, decimal: bool) {
+        self.d = decimal;
+    }
+
     pub fn flag_carry(&mut self, carry: bool) {
         self.c = carry;
+    }
+
+    pub fn flag_overflow(&mut self, overflow: bool) {
+        self.o = overflow;
+    }
+
+    pub fn flag_break(&mut self, break_bool: bool) {
+        self.b = break_bool;
     }
 
     pub fn flag_negative(&mut self, val: u8) {
@@ -83,7 +99,7 @@ impl Cpu {
         }
     }
 
-    pub fn flag_overflow(&mut self, a: u8, b: u8, c: u8) {
+    pub fn flag_overflow_adding(&mut self, a: u8, b: u8, c: u8) {
         if (self.a > 0 && b > 0 && (c as i8) < 0) || (self.a < 0 && b < 0 && (c as i8) > 0) {
             self.o = true;
         }
@@ -112,17 +128,6 @@ impl Cpu {
     //    self.flag_zero(temp);
     //}
 
-    //pub fn BIT(&mut self, val: u8) {
-    //    let res = val & self.a;
-    //    self.flag_zero(res);
-    //    self.flag_negative(res);
-    //    self.o = res & 0x40 == 1;
-    //}
-
-    //pub fn BXX(&mut self, val: isize) {
-    //    self.pc = (self.pc).wrapping_add_signed(val) as usize;
-    //}
-
     // --------------- ADDRESSING --------------------
 
     pub fn ID(&mut self, memory: &mut Vec<u8>) -> (usize) {
@@ -148,6 +153,7 @@ impl Cpu {
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
         let target_addr = match self.addr {
             Addressing::ACC => { self.pc += 1; 0 },
+            Addressing::IMP => { self.pc += 1; 0 },
             Addressing::IMM => { self.pc += 2; self.pc - 1 as usize },
             Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as usize },
             Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as usize },
@@ -175,7 +181,7 @@ impl Cpu {
                 let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!("{}", ERR_INSTR) };
                 let (val_with_carry, overflow1) = op(target_val, self.c as u8);
                 let (result, overflow2) =  op(self.a, val_with_carry);
-                self.flag_zero(result); self.flag_negative(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow(self.a, val_with_carry, result);
+                self.flag_zero(result); self.flag_negative(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow_adding(self.a, val_with_carry, result);
                 self.a = result;
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
@@ -198,6 +204,23 @@ impl Cpu {
                     self.flag_zero(modified_val); self.flag_negative(modified_val);
                 }
             }
+            Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
+                let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!("{}", ERR_INSTR) }; 
+                if can_branch {
+                    self.pc = self.pc.wrapping_add(target_val as usize);
+                }
+            }
+            Instructions::BIT => {
+                let res = target_val & self.a;
+                self.flag_zero(res); self.flag_negative(res); self.flag_overflow(res & 0x40 == 1);
+            }
+            Instructions::BRK => {
+                self.stack.push(self.pc);
+                self.pc = 0xFFFE;
+                self.flag_break(true);
+            }
+            Instructions::CLC => self.flag_carry(false), Instructions::CLD => self.flag_decimal(false), Instructions::CLI => self.flag_interrupt(false), Instructions::CLV => self.flag_overflow(false),
+            Instructions::SEC => self.flag_carry(true), Instructions::SED => self.flag_decimal(true), Instructions::SEI => self.flag_interrupt(true),
             _ => panic!("{}", ERR_OP),
         }
     }
@@ -239,6 +262,19 @@ impl Cpu {
             0x10 => {self.instr = Instructions::BPL; self.addr = Addressing::REL; cycles = 2 + !self.n as u8 + bus.cross_rel(self.pc)},
             0x50 => {self.instr = Instructions::BVC; self.addr = Addressing::REL; cycles = 2 + !self.o as u8 + bus.cross_rel(self.pc)},
             0x70 => {self.instr = Instructions::BVS; self.addr = Addressing::REL; cycles = 2 + self.o as u8 + bus.cross_rel(self.pc)},
+
+            0x24 => {self.instr = Instructions::BIT; self.addr = Addressing::ZPG; cycles = 3},
+            0x2C => {self.instr = Instructions::BIT; self.addr = Addressing::ABS; cycles = 4},
+
+            0x00 => {self.instr = Instructions::BRK; self.addr = Addressing::IMP; cycles = 7},
+
+            0x50 => {self.instr = Instructions::CLC; self.addr = Addressing::IMP; cycles = 2},
+            0xD8 => {self.instr = Instructions::CLD; self.addr = Addressing::IMP; cycles = 2},
+            0x58 => {self.instr = Instructions::CLI; self.addr = Addressing::IMP; cycles = 2},
+            0xB8 => {self.instr = Instructions::CLV; self.addr = Addressing::IMP; cycles = 2},
+            0x38 => {self.instr = Instructions::SEC; self.addr = Addressing::IMP; cycles = 2},
+            0xF8 => {self.instr = Instructions::SED; self.addr = Addressing::IMP; cycles = 2},
+            0x78 => {self.instr = Instructions::SEI; self.addr = Addressing::IMP; cycles = 2},
             _ => panic!("{}", ERR_OP),
         }
         cycles
