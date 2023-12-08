@@ -65,6 +65,28 @@ impl Cpu {
         }
     }
 
+    // --------------- REGISTERS --------------------
+
+    pub fn INX(&mut self) -> u8 {
+        self.x += 1;
+        self.x
+    }
+
+    pub fn INY(&mut self) -> u8 {
+        self.y += 1;
+        self.y
+    }
+
+    pub fn DEX(&mut self) -> u8 {
+        self.x -= 1;
+        self.x
+    }
+
+    pub fn DEY(&mut self) -> u8 {
+        self.y -= 1;
+        self.y
+    }
+
     // --------------- FLAGS --------------------
 
     pub fn flag_interrupt(&mut self, interrupt: bool) {
@@ -87,6 +109,14 @@ impl Cpu {
         self.b = break_bool;
     }
 
+    pub fn flag_negative(&mut self, negative: bool) {
+        self.b = negative;
+    }
+
+    pub fn flag_zero(&mut self, zero: bool) {
+        self.b = zero;
+    }
+
     pub fn flag_negative_from_val(&mut self, val: u8) {
         if (val as i8) < 0 {
             self.n = true;
@@ -105,36 +135,6 @@ impl Cpu {
         }
     }
 
-    // --------------- OPERATIONS --------------------
-
-    //pub fn INC(&mut self, memory: &mut Vec<u8>) {
-    //    memory[self.ram] -= 1;
-    //    let res = memory[self.ram];
-    //    self.flag_zero_from_val(res);
-    //    self.flag_negative_from_val(res);
-    //}
-
-    //pub fn DEC(&mut self, memory: &mut Vec<u8>) {
-    //    memory[self.ram] -= 1;
-    //    let res = memory[self.ram];
-    //    self.flag_zero_from_val(res);
-    //    self.flag_negative_from_val(res);
-    //}
-
-    //pub fn CMP(&mut self, a: u8, val: u8) {
-    //    let temp = a - val;
-    //    self.flag_negative_from_val(temp);
-    //    self.flag_carry(temp >= 0);
-    //    self.flag_zero_from_val(temp);
-    //}
-
-    // --------------- ADDRESSING --------------------
-
-    pub fn ID(&mut self, memory: &mut Vec<u8>) -> (usize) {
-        self.pc += 3;
-        (memory[self.pc - 2] as u16 | (memory[self.pc - 1] as u16) << 8) as usize
-    }
-
     // --------------- END --------------------
 
     #[rustfmt::skip]
@@ -150,15 +150,26 @@ impl Cpu {
             Addressing::ABY => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.y as u16) as usize },
             Addressing::IDX => {
                 self.pc += 2;
-                let zp = bus.read_single(self.pc).wrapping_add(self.x);
-                combine_low_high(zp, zp + 1) as usize
+                let inline_addr = bus.read_single(self.pc).wrapping_add(self.x);
+                let low = bus.read_8(inline_addr);
+                let high = bus.read_8(inline_addr + 1);
+                combine_low_high(low, high) as usize
             }
             Addressing::IDY => {
                 self.pc += 2;
-                let zp = bus.read_single(self.pc);
-                combine_low_high(zp, zp + 1).wrapping_add(self.y as u16) as usize
+                let inline_addr = bus.read_single(self.pc);
+                let low = bus.read_8(inline_addr);
+                let high = bus.read_8(inline_addr + 1);
+                combine_low_high(low, high).wrapping_add(self.y as u16) as usize
             }
             Addressing::REL => { self.pc += 2; self.pc - 1 as usize},
+            Addressing::IND => { 
+                self.pc += 3;
+                let inline_addr = bus.read_double(self.pc);
+                let low = bus.read_16(inline_addr);
+                let high = bus.read_16(inline_addr + 1);
+                combine_low_high(low, high) as usize
+            },
             _ => panic!("{}", ERR_ADDR),
         };
 
@@ -209,6 +220,17 @@ impl Cpu {
             }
             Instructions::CLC => self.flag_carry(false), Instructions::CLD => self.flag_decimal(false), Instructions::CLI => self.flag_interrupt(false), Instructions::CLV => self.flag_overflow(false),
             Instructions::SEC => self.flag_carry(true), Instructions::SED => self.flag_decimal(true), Instructions::SEI => self.flag_interrupt(true),
+            Instructions::CMP | Instructions::CPX | Instructions::CPY => {
+                let reg = match self.instr { Instructions::CMP => self.a, Instructions::CPX => self.x, Instructions::CPY => self.y, _ => panic!("{}", ERR_INSTR)};
+                self.flag_negative(reg < target_val); self.flag_zero(reg == target_val); self.flag_carry(reg >= target_val);
+            }
+            Instructions::DEC | Instructions::DEX | Instructions::DEY | Instructions::INC | Instructions::INX | Instructions::INY => {
+                let res = match self.instr { Instructions::DEC => bus.DEC(target_addr), Instructions::INC => bus.INC(target_addr), Instructions::DEX => self.DEX(), Instructions::DEY => self.DEY(), Instructions::INX => self.INX(), Instructions::INY => self.INY(), _ => panic!("{}", ERR_INSTR) };
+                self.flag_negative_from_val(res); self.flag_zero_from_val(res);
+            }
+            Instructions::JMP => {
+                self.pc = target_addr;
+            }
             _ => panic!("{}", ERR_OP),
         }
     }
@@ -263,6 +285,37 @@ impl Cpu {
             0x38 => {self.instr = Instructions::SEC; self.addr = Addressing::IMP; cycles = 2},
             0xF8 => {self.instr = Instructions::SED; self.addr = Addressing::IMP; cycles = 2},
             0x78 => {self.instr = Instructions::SEI; self.addr = Addressing::IMP; cycles = 2},
+
+            0xC9 => {self.instr = Instructions::CMP; self.addr = Addressing::IMM; cycles = 2},
+            0xC5 => {self.instr = Instructions::CMP; self.addr = Addressing::ZPG; cycles = 3},
+            0xD5 => {self.instr = Instructions::CMP; self.addr = Addressing::ZPX; cycles = 4},
+            0xCD => {self.instr = Instructions::CMP; self.addr = Addressing::ABS; cycles = 4},
+            0xDD => {self.instr = Instructions::CMP; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.y)},
+            0xD9 => {self.instr = Instructions::CMP; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc, self.y)},
+            0xC1 => {self.instr = Instructions::CMP; self.addr = Addressing::IDX; cycles = 6},
+            0xD1 => {self.instr = Instructions::CMP; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc, self.y)},
+            0xE0 => {self.instr = Instructions::CPX; self.addr = Addressing::IMM; cycles = 2},
+            0xE4 => {self.instr = Instructions::CPX; self.addr = Addressing::ZPG; cycles = 3},
+            0xEC => {self.instr = Instructions::CPX; self.addr = Addressing::ABS; cycles = 4},
+            0xC0 => {self.instr = Instructions::CPY; self.addr = Addressing::IMM; cycles = 2},
+            0xC4 => {self.instr = Instructions::CPY; self.addr = Addressing::ZPG; cycles = 3},
+            0xCC => {self.instr = Instructions::CPY; self.addr = Addressing::ABS; cycles = 4},
+
+            0xC6 => {self.instr = Instructions::DEC; self.addr = Addressing::ZPG; cycles = 5},
+            0xD6 => {self.instr = Instructions::DEC; self.addr = Addressing::ZPX; cycles = 6},
+            0xCE => {self.instr = Instructions::DEC; self.addr = Addressing::ABS; cycles = 6},
+            0xDE => {self.instr = Instructions::DEC; self.addr = Addressing::ABX; cycles = 7},
+            0xCA => {self.instr = Instructions::DEX; self.addr = Addressing::IMP; cycles = 2},
+            0x88 => {self.instr = Instructions::DEY; self.addr = Addressing::IMP; cycles = 2},
+            0xE6 => {self.instr = Instructions::INC; self.addr = Addressing::ZPG; cycles = 5},
+            0xF6 => {self.instr = Instructions::INC; self.addr = Addressing::ZPX; cycles = 6},
+            0xEE => {self.instr = Instructions::INC; self.addr = Addressing::ABS; cycles = 6},
+            0xFE => {self.instr = Instructions::INC; self.addr = Addressing::ABX; cycles = 7},
+            0xCA => {self.instr = Instructions::INX; self.addr = Addressing::IMP; cycles = 2},
+            0x88 => {self.instr = Instructions::INY; self.addr = Addressing::IMP; cycles = 2},
+
+            0x4C => {self.instr = Instructions::JMP; self.addr = Addressing::ABS; cycles = 3},
+            0x6C => {self.instr = Instructions::JMP; self.addr = Addressing::IND; cycles = 5},
             _ => panic!("{}", ERR_OP),
         }
         cycles

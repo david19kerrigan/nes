@@ -30,12 +30,17 @@ impl Bus {
     }
 
     // Read address in memory from a low and a high byte in low endian
-    pub fn read_16(&mut self, low: u8, high: u8) -> u8 {
+    pub fn read_low_high(&mut self, low: u8, high: u8) -> u8 {
         self.read_usize(combine_low_high(low, high) as usize)
     }
 
-    // Read zero page address
+    // Read absolute address
     pub fn read_8(&mut self, addr: u8) -> u8 {
+        self.read_usize(addr as usize)
+    }
+
+    // Read zero page address
+    pub fn read_16(&mut self, addr: u16) -> u8 {
         self.read_usize(addr as usize)
     }
 
@@ -68,6 +73,18 @@ impl Bus {
     pub fn cross_abs(&mut self, pc: usize, offset: u8) -> u8 {
         let low = self.read_usize(pc + 1);
         let high = self.read_usize(pc + 2);
-        self.read_16(low, high).overflowing_add(offset).1 as u8
+        self.read_low_high(low, high).overflowing_add(offset).1 as u8
+    }
+
+    pub fn DEC(&mut self, addr: usize) -> u8 {
+        let val = self.read_usize(addr) - 1;
+        self.write_usize(addr, val);
+        val
+    }
+
+    pub fn INC(&mut self, addr: usize) -> u8 {
+        let val = self.read_usize(addr) + 1;
+        self.write_usize(addr, val);
+        val
     }
 }
