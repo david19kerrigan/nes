@@ -185,7 +185,7 @@ impl Cpu {
                 self.a = result;
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
-                let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, _ => panic!("{}", ERR_INSTR) };
+                let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, Instructions::EOR => &u8_xor, _ => panic!("{}", ERR_INSTR) };
                 self.a = op(self.a, target_val);
                 self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
             }
@@ -236,6 +236,11 @@ impl Cpu {
             Instructions::RTS => {
                 self.pc = match self.stack.pop() { Some(res) => res, None => panic!("{}", ERR_ST) };
             }
+            Instructions::LDA | Instructions::LDX | Instructions::LDY => {
+                match self.instr { Instructions::LDA => self.a = target_val, Instructions::LDX => self.x = target_val, Instructions::LDY => self.y = target_val, _ => panic!("{}", ERR_INSTR) };
+                self.flag_zero_from_val(target_val); self.flag_negative_from_val(target_val);
+            }
+            Instructions::NOP => (),
             _ => panic!("{}", ERR_OP),
         }
     }
@@ -324,6 +329,27 @@ impl Cpu {
             0x20 => {self.instr = Instructions::JSR; self.addr = Addressing::ABS; cycles = 6},
 
             0x60 => {self.instr = Instructions::RTS; self.addr = Addressing::IMP; cycles = 6},
+
+            0xA9 => {self.instr = Instructions::LDA; self.addr = Addressing::IMM; cycles = 2},
+            0xA5 => {self.instr = Instructions::LDA; self.addr = Addressing::ZPG; cycles = 3},
+            0xB5 => {self.instr = Instructions::LDA; self.addr = Addressing::ZPX; cycles = 4},
+            0xAD => {self.instr = Instructions::LDA; self.addr = Addressing::ABS; cycles = 4},
+            0xBD => {self.instr = Instructions::LDA; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+            0xB9 => {self.instr = Instructions::LDA; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc, self.y)},
+            0xA1 => {self.instr = Instructions::LDA; self.addr = Addressing::IDX; cycles = 6},
+            0xB1 => {self.instr = Instructions::LDA; self.addr = Addressing::IDY; cycles = 5 + bus.cross_idy(self.pc, self.y)},
+            0xA2 => {self.instr = Instructions::LDY; self.addr = Addressing::IMM; cycles = 2},
+            0xA6 => {self.instr = Instructions::LDY; self.addr = Addressing::ZPG; cycles = 3},
+            0xB6 => {self.instr = Instructions::LDY; self.addr = Addressing::ZPY; cycles = 4},
+            0xAE => {self.instr = Instructions::LDY; self.addr = Addressing::ABS; cycles = 4},
+            0xBE => {self.instr = Instructions::LDY; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+            0xA2 => {self.instr = Instructions::LDX; self.addr = Addressing::IMM; cycles = 2},
+            0xA6 => {self.instr = Instructions::LDX; self.addr = Addressing::ZPG; cycles = 3},
+            0xB6 => {self.instr = Instructions::LDX; self.addr = Addressing::ZPY; cycles = 4},
+            0xAE => {self.instr = Instructions::LDX; self.addr = Addressing::ABS; cycles = 4},
+            0xBE => {self.instr = Instructions::LDX; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+
+            0xEA => {self.instr = Instructions::LDX; self.addr = Addressing::IMM; cycles = 2},
             _ => panic!("{}", ERR_OP),
         }
         cycles
