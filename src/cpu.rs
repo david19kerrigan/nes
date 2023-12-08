@@ -4,6 +4,7 @@ use crate::Bus;
 const ERR_INSTR: &str = "Invalid Instruction";
 const ERR_OP: &str = "Invalid Opcode";
 const ERR_ADDR: &str = "Invalid Addressing Mode";
+const ERR_ST: &str = "Tried to pop from empty stack";
 
 #[rustfmt::skip]
 #[derive(PartialEq)]
@@ -130,7 +131,7 @@ impl Cpu {
     }
 
     pub fn flag_overflow_from_vals(&mut self, a: u8, b: u8, c: u8) {
-        if (self.a > 0 && b > 0 && (c as i8) < 0) || (self.a < 0 && b < 0 && (c as i8) > 0) {
+        if (self.a > 0 && b > 0 && (c as i8) < 0) || ((self.a as i8) < 0 && (b as i8) < 0 && c > 0) {
             self.o = true;
         }
     }
@@ -228,8 +229,12 @@ impl Cpu {
                 let res = match self.instr { Instructions::DEC => bus.DEC(target_addr), Instructions::INC => bus.INC(target_addr), Instructions::DEX => self.DEX(), Instructions::DEY => self.DEY(), Instructions::INX => self.INX(), Instructions::INY => self.INY(), _ => panic!("{}", ERR_INSTR) };
                 self.flag_negative_from_val(res); self.flag_zero_from_val(res);
             }
-            Instructions::JMP => {
+            Instructions::JMP | Instructions::JSR => {
+                if self.instr == Instructions::JSR { self.stack.push(self.pc) }
                 self.pc = target_addr;
+            }
+            Instructions::RTS => {
+                self.pc = match self.stack.pop() { Some(res) => res, None => panic!("{}", ERR_ST) };
             }
             _ => panic!("{}", ERR_OP),
         }
@@ -316,6 +321,9 @@ impl Cpu {
 
             0x4C => {self.instr = Instructions::JMP; self.addr = Addressing::ABS; cycles = 3},
             0x6C => {self.instr = Instructions::JMP; self.addr = Addressing::IND; cycles = 5},
+            0x20 => {self.instr = Instructions::JSR; self.addr = Addressing::ABS; cycles = 6},
+
+            0x60 => {self.instr = Instructions::RTS; self.addr = Addressing::IMP; cycles = 6},
             _ => panic!("{}", ERR_OP),
         }
         cycles

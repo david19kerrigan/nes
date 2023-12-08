@@ -14,7 +14,7 @@ impl Bus {
     }
 
     pub fn check_addr_in_range(&mut self, addr: usize) {
-        if addr < 0 || addr > memory_size {
+        if addr > memory_size {
             panic!("bus memory address out of range");
         }
     }
