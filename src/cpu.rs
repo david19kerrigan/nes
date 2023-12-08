@@ -241,6 +241,9 @@ impl Cpu {
                 self.flag_zero_from_val(target_val); self.flag_negative_from_val(target_val);
             }
             Instructions::NOP => (),
+            Instructions::PHA => {
+                self.stack.push(self.a);
+            }
             _ => panic!("{}", ERR_OP),
         }
     }
@@ -349,7 +352,9 @@ impl Cpu {
             0xAE => {self.instr = Instructions::LDX; self.addr = Addressing::ABS; cycles = 4},
             0xBE => {self.instr = Instructions::LDX; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
 
-            0xEA => {self.instr = Instructions::LDX; self.addr = Addressing::IMM; cycles = 2},
+            0xEA => {self.instr = Instructions::NOP; self.addr = Addressing::IMP; cycles = 2},
+
+            0x48 => {self.instr = Instructions::PHA; self.addr = Addressing::IMP; cycles = 3},
             _ => panic!("{}", ERR_OP),
         }
         cycles
