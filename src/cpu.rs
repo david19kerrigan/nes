@@ -1,10 +1,10 @@
 use crate::util::*;
 use crate::Bus;
 
-const ERR_INSTR: &str = "Invalid Instruction";
 const ERR_OP: &str = "Invalid Opcode";
 const ERR_ADDR: &str = "Invalid Addressing Mode";
 const ERR_ST: &str = "Tried to pop from empty stack";
+const ERR_CONV: &str = "Error converting u8 to str";
 
 #[rustfmt::skip]
 #[derive(PartialEq)]
@@ -64,6 +64,14 @@ impl Cpu {
             addr: Addressing::IMM,
             stack: vec![],
         }
+    }
+
+    // --------------- INSTRUCTIONS --------------------
+
+    pub fn PHP(&mut self) {
+        let mut all_flags: u8 = 255;
+        all_flags |= (self.n as u8) << 7 | (self.o as u8) << 6 | (self.b as u8) << 4 | (self.d as u8) << 3 | (self.i as u8) << 2 | (self.z as u8) << 1 | (self.c as u8); 
+        self.stack.push(all_flags as usize);
     }
 
     // --------------- REGISTERS --------------------
@@ -178,19 +186,19 @@ impl Cpu {
 
         match self.instr {
             Instructions::ADC | Instructions::SBC => {
-                let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!("{}", ERR_INSTR) };
+                let op: &dyn Fn(u8, u8) -> (u8, bool) = match self.instr { Instructions::ADC => &u8::overflowing_add, Instructions::SBC => &u8::overflowing_sub, _ => panic!() };
                 let (val_with_carry, overflow1) = op(target_val, self.c as u8);
                 let (result, overflow2) =  op(self.a, val_with_carry);
                 self.flag_zero_from_val(result); self.flag_negative_from_val(result); self.flag_carry(overflow1 || overflow2); self.flag_overflow_from_vals(self.a, val_with_carry, result);
                 self.a = result;
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
-                let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, Instructions::EOR => &u8_xor, _ => panic!("{}", ERR_INSTR) };
+                let op: &dyn Fn(u8, u8) -> (u8) = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, Instructions::EOR => &u8_xor, _ => panic!() };
                 self.a = op(self.a, target_val);
                 self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
-                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!("{}", ERR_INSTR) };
+                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!() };
                 if self.addr == Addressing::ACC {
                     self.flag_carry(self.a & 0x80 == 1);
                     self.a = op(self.a);
@@ -205,7 +213,7 @@ impl Cpu {
                 }
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
-                let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!("{}", ERR_INSTR) }; 
+                let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() }; 
                 if can_branch {
                     self.pc = self.pc.wrapping_add(target_val as usize);
                 }
@@ -216,17 +224,18 @@ impl Cpu {
             }
             Instructions::BRK => {
                 self.stack.push(self.pc);
+                self.PHP();
                 self.pc = 0xFFFE;
                 self.flag_break(true);
             }
             Instructions::CLC => self.flag_carry(false), Instructions::CLD => self.flag_decimal(false), Instructions::CLI => self.flag_interrupt(false), Instructions::CLV => self.flag_overflow(false),
             Instructions::SEC => self.flag_carry(true), Instructions::SED => self.flag_decimal(true), Instructions::SEI => self.flag_interrupt(true),
             Instructions::CMP | Instructions::CPX | Instructions::CPY => {
-                let reg = match self.instr { Instructions::CMP => self.a, Instructions::CPX => self.x, Instructions::CPY => self.y, _ => panic!("{}", ERR_INSTR)};
+                let reg = match self.instr { Instructions::CMP => self.a, Instructions::CPX => self.x, Instructions::CPY => self.y, _ => panic!()};
                 self.flag_negative(reg < target_val); self.flag_zero(reg == target_val); self.flag_carry(reg >= target_val);
             }
             Instructions::DEC | Instructions::DEX | Instructions::DEY | Instructions::INC | Instructions::INX | Instructions::INY => {
-                let res = match self.instr { Instructions::DEC => bus.DEC(target_addr), Instructions::INC => bus.INC(target_addr), Instructions::DEX => self.DEX(), Instructions::DEY => self.DEY(), Instructions::INX => self.INX(), Instructions::INY => self.INY(), _ => panic!("{}", ERR_INSTR) };
+                let res = match self.instr { Instructions::DEC => bus.DEC(target_addr), Instructions::INC => bus.INC(target_addr), Instructions::DEX => self.DEX(), Instructions::DEY => self.DEY(), Instructions::INX => self.INX(), Instructions::INY => self.INY(), _ => panic!() };
                 self.flag_negative_from_val(res); self.flag_zero_from_val(res);
             }
             Instructions::JMP | Instructions::JSR => {
@@ -237,13 +246,29 @@ impl Cpu {
                 self.pc = match self.stack.pop() { Some(res) => res, None => panic!("{}", ERR_ST) };
             }
             Instructions::LDA | Instructions::LDX | Instructions::LDY => {
-                match self.instr { Instructions::LDA => self.a = target_val, Instructions::LDX => self.x = target_val, Instructions::LDY => self.y = target_val, _ => panic!("{}", ERR_INSTR) };
+                match self.instr { Instructions::LDA => self.a = target_val, Instructions::LDX => self.x = target_val, Instructions::LDY => self.y = target_val, _ => panic!() };
                 self.flag_zero_from_val(target_val); self.flag_negative_from_val(target_val);
             }
             Instructions::NOP => (),
             Instructions::PHA => {
-                self.stack.push(self.a);
+                self.stack.push(self.a as usize);
             }
+            Instructions::PLA => {
+                self.a = match self.stack.pop() { Some(res) => res as u8, None => panic!("{}", ERR_ST) };
+            }
+            Instructions::PHP => {
+                self.PHP();
+            },
+            Instructions::PLP => {
+                let mut all_flags = match self.stack.pop() { Some(res) => res as u8, None => panic!("{}", ERR_ST) };
+                self.n = all_flags & 0b10000000 == 1;
+                self.o = all_flags & 0b01000000 == 1;
+                self.b = all_flags & 0b00100000 == 1;
+                self.d = all_flags & 0b00001000 == 1;
+                self.i = all_flags & 0b00000100 == 1;
+                self.z = all_flags & 0b00000010 == 1;
+                self.c = all_flags & 0b00000001 == 1;
+            },
             _ => panic!("{}", ERR_OP),
         }
     }
@@ -355,6 +380,12 @@ impl Cpu {
             0xEA => {self.instr = Instructions::NOP; self.addr = Addressing::IMP; cycles = 2},
 
             0x48 => {self.instr = Instructions::PHA; self.addr = Addressing::IMP; cycles = 3},
+
+            0x68 => {self.instr = Instructions::PLA; self.addr = Addressing::IMP; cycles = 4},
+
+            0x08 => {self.instr = Instructions::PHP; self.addr = Addressing::IMP; cycles = 3},
+
+            0x28 => {self.instr = Instructions::PLP; self.addr = Addressing::IMP; cycles = 4},
             _ => panic!("{}", ERR_OP),
         }
         cycles
