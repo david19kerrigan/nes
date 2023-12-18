@@ -26,7 +26,7 @@ pub struct Cpu {
     a: u8,
     x: u8,
     y: u8,
-    pc: usize,
+    pc: u16,
     s: u8,
     //flags
     c: bool,
@@ -40,7 +40,7 @@ pub struct Cpu {
     instr: Instructions,
     addr: Addressing,
     stack: [u8; 256],
-    stack_pointer: usize,
+    stack_pointer: u8,
 }
 
 impl Cpu {
@@ -99,19 +99,19 @@ impl Cpu {
     pub fn stack_pull_pc(&mut self) {
         let low = self.stack_pull();
         let high = self.stack_pull();
-        self.pc = combine_low_high(low, high) as usize;
+        self.pc = combine_low_high(low, high);
     }
 
     pub fn stack_push(&mut self, val: u8) {
         self.stack_pointer += 1;
         if self.stack_pointer > 0xFF { panic!("{}", ERR_ST); }
-        self.stack[self.stack_pointer] = val;
+        self.stack[self.stack_pointer as usize] = val;
     }
 
     pub fn stack_pull(&mut self) -> u8 {
         self.stack_pointer -= 1;
         if self.stack_pointer < 0 { panic!("{}", ERR_ST); }
-        self.stack[self.stack_pointer]
+        self.stack[self.stack_pointer as usize]
     }
 
     pub fn INX(&mut self) -> u8 {
@@ -187,40 +187,38 @@ impl Cpu {
     #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
         let target_addr = match self.addr {
-            Addressing::ACC => { self.pc += 1; 0 },
-            Addressing::IMP => { self.pc += 1; 0 },
-            Addressing::IMM => { self.pc += 2; self.pc - 1 as usize },
-            Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as usize },
-            Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as usize },
-            Addressing::ABS => { self.pc += 3; bus.read_double(self.pc) as usize } ,
-            Addressing::ABX => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.x as u16) as usize },
-            Addressing::ABY => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.y as u16) as usize },
+            Addressing::IMM => { self.pc += 2; self.pc - 1 },
+            Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as u16 },
+            Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as u16 },
+            Addressing::ABS => { self.pc += 3; bus.read_double(self.pc) as u16 } ,
+            Addressing::ABX => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.x as u16) as u16 },
+            Addressing::ABY => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.y as u16) as u16 },
             Addressing::IDX => {
                 self.pc += 2;
                 let inline_addr = bus.read_single(self.pc).wrapping_add(self.x);
                 let low = bus.read_8(inline_addr);
                 let high = bus.read_8(inline_addr + 1);
-                combine_low_high(low, high) as usize
+                combine_low_high(low, high)
             }
             Addressing::IDY => {
                 self.pc += 2;
                 let inline_addr = bus.read_single(self.pc);
                 let low = bus.read_8(inline_addr);
                 let high = bus.read_8(inline_addr + 1);
-                combine_low_high(low, high).wrapping_add(self.y as u16) as usize
+                combine_low_high(low, high).wrapping_add(self.y as u16)
             }
-            Addressing::REL => { self.pc += 2; self.pc - 1 as usize},
+            Addressing::REL => { self.pc += 2; self.pc - 1 },
             Addressing::IND => { 
                 self.pc += 3;
                 let inline_addr = bus.read_double(self.pc);
                 let low = bus.read_16(inline_addr);
                 let high = bus.read_16(inline_addr + 1);
-                combine_low_high(low, high) as usize
+                combine_low_high(low, high)
             },
             _ => panic!("{}", ERR_ADDR),
         };
 
-        let mut target_val = bus.read_usize(target_addr);
+        let mut target_val = bus.read_16(target_addr);
 
         match self.instr {
             Instructions::ADC | Instructions::SBC => {
@@ -246,14 +244,14 @@ impl Cpu {
                     self.flag_carry(target_val & 0x80 == 1);
                     let mut modified_val = op(target_val);
                     match self.instr { Instructions::ROL | Instructions::ROR => modified_val |= self.c as u8, _ => () };
-                    bus.write_usize(target_addr, modified_val);
+                    bus.write_16(target_addr, modified_val);
                     self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val);
                 }
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() }; 
                 if can_branch {
-                    self.pc = self.pc.wrapping_add(target_val as usize);
+                    self.pc = self.pc.wrapping_add(target_val as u16);
                 }
             }
             Instructions::BIT => {
@@ -329,7 +327,7 @@ impl Cpu {
                 self.x = self.stack_pointer as u8;
             },
             Instructions::TXS => {
-                self.stack_pointer = self.x as usize;
+                self.stack_pointer = self.x;
             },
             _ => panic!("{}", ERR_OP),
         }
@@ -339,7 +337,7 @@ impl Cpu {
     pub fn load_instruction(&mut self, bus: &mut Bus) -> u8 {
         let cycles: u8;
 
-        match bus.read_usize(self.pc) {
+        match bus.read_16(self.pc) {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
             0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3},
             0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4},

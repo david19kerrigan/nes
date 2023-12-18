@@ -19,6 +19,11 @@ impl Bus {
         }
     }
 
+    pub fn write_16(&mut self, addr: u16, val: u8) {
+        let u_addr = addr as usize;
+        self.write_usize(u_addr, val);
+    }
+
     pub fn write_usize(&mut self, addr: usize, val: u8) {
         self.check_addr_in_range(addr);
         self.memory[addr] = val;
@@ -45,24 +50,26 @@ impl Bus {
     }
 
     // Read one byte in relation to the PC
-    pub fn read_single(&mut self, addr: usize) -> u8 {
-        self.read_usize(addr - 1)
+    pub fn read_single(&mut self, addr: u16) -> u8 {
+        let u_addr = addr as usize;
+        self.read_usize(u_addr - 1)
     }
 
     // Read two bytes in relation to the PC
-    pub fn read_double(&mut self, addr: usize) -> u16 {
-        combine_low_high(self.read_usize(addr - 2), self.read_usize(addr - 1))
+    pub fn read_double(&mut self, addr: u16) -> u16 {
+        let u_addr = addr as usize;
+        combine_low_high(self.read_usize(u_addr - 2), self.read_usize(u_addr - 1))
     }
 
     // Does addressing mode Rel cross the page?
-    pub fn cross_rel(&mut self, pc: usize) -> u8 {
-        let low = self.read_usize(pc + 1);
+    pub fn cross_rel(&mut self, pc: u16) -> u8 {
+        let low = self.read_16(pc + 1);
         (pc as u8).overflowing_add(low).1 as u8
     }
 
     // Does addressing mode Indexed Y cross the page?
-    pub fn cross_idy(&mut self, pc: usize, offset: u8) -> u8 {
-        let low = self.read_usize(pc + 1);
+    pub fn cross_idy(&mut self, pc: u16, offset: u8) -> u8 {
+        let low = self.read_16(pc + 1);
         let zp = self.read_8(low);
         combine_low_high(zp, zp + 1)
             .overflowing_add(offset as u16)
@@ -70,21 +77,21 @@ impl Bus {
     }
 
     // Does addressing mode Indexed X cross the page?
-    pub fn cross_abs(&mut self, pc: usize, offset: u8) -> u8 {
-        let low = self.read_usize(pc + 1);
-        let high = self.read_usize(pc + 2);
+    pub fn cross_abs(&mut self, pc: u16, offset: u8) -> u8 {
+        let low = self.read_16(pc + 1);
+        let high = self.read_16(pc + 2);
         self.read_low_high(low, high).overflowing_add(offset).1 as u8
     }
 
-    pub fn DEC(&mut self, addr: usize) -> u8 {
-        let val = self.read_usize(addr) - 1;
-        self.write_usize(addr, val);
+    pub fn DEC(&mut self, addr: u16) -> u8 {
+        let val = self.read_16(addr) - 1;
+        self.write_16(addr, val);
         val
     }
 
-    pub fn INC(&mut self, addr: usize) -> u8 {
-        let val = self.read_usize(addr) + 1;
-        self.write_usize(addr, val);
+    pub fn INC(&mut self, addr: u16) -> u8 {
+        let val = self.read_16(addr) + 1;
+        self.write_16(addr, val);
         val
     }
 }
