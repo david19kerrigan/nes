@@ -311,20 +311,17 @@ impl Cpu {
             Instructions::STY => {
                 self.y = target_val;
             },
-            Instructions::TAX => {
-                self.x = self.a;
+            Instructions::TAX | Instructions::TSX => {
+                self.x = match self.instr { Instructions::TAX => self.a, Instructions::TSX => self.x, _ => panic!() };
+                self.flag_zero_from_val(self.x); self.flag_negative_from_val(self.x);
+            },
+            Instructions::TXA => {
+                self.a = match self.instr { Instructions::TXA => self.x, Instructions::TYA => self.y, _ => panic!() };
+                self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
             },
             Instructions::TAY => {
                 self.y = self.a;
-            },
-            Instructions::TXA => {
-                self.a = self.x;
-            },
-            Instructions::TYA => {
-                self.a = self.y;
-            },
-            Instructions::TSX => {
-                self.x = self.stack_pointer as u8;
+                self.flag_zero_from_val(self.y); self.flag_negative_from_val(self.y);
             },
             Instructions::TXS => {
                 self.stack_pointer = self.x;
