@@ -39,7 +39,8 @@ pub struct Cpu {
     // misc
     instr: Instructions,
     addr: Addressing,
-    stack: Vec<usize>,
+    stack: [u8; 256],
+    stack_pointer: usize,
 }
 
 impl Cpu {
@@ -62,7 +63,8 @@ impl Cpu {
             // misc
             instr: Instructions::ADC,
             addr: Addressing::IMM,
-            stack: vec![],
+            stack: [0; 256],
+            stack_pointer: 0,
         }
     }
 
@@ -71,10 +73,46 @@ impl Cpu {
     pub fn PHP(&mut self) {
         let mut all_flags: u8 = 255;
         all_flags |= (self.n as u8) << 7 | (self.o as u8) << 6 | (self.b as u8) << 4 | (self.d as u8) << 3 | (self.i as u8) << 2 | (self.z as u8) << 1 | (self.c as u8); 
-        self.stack.push(all_flags as usize);
+        self.stack_push(all_flags);
+    }
+
+    pub fn PLP(&mut self) {
+        let mut all_flags = self.stack_pull();
+        self.n = all_flags & 0b10000000 == 1;
+        self.o = all_flags & 0b01000000 == 1;
+        self.b = all_flags & 0b00100000 == 1;
+        self.d = all_flags & 0b00001000 == 1;
+        self.i = all_flags & 0b00000100 == 1;
+        self.z = all_flags & 0b00000010 == 1;
+        self.c = all_flags & 0b00000001 == 1;
     }
 
     // --------------- REGISTERS --------------------
+
+    pub fn stack_push_pc(&mut self) {
+        let low = self.pc as u8;
+        let high = (self.pc >> 8) as u8;
+        self.stack_push(high);
+        self.stack_push(low);
+    }
+
+    pub fn stack_pull_pc(&mut self) {
+        let low = self.stack_pull();
+        let high = self.stack_pull();
+        self.pc = combine_low_high(low, high) as usize;
+    }
+
+    pub fn stack_push(&mut self, val: u8) {
+        self.stack_pointer += 1;
+        if self.stack_pointer > 0xFF { panic!("{}", ERR_ST); }
+        self.stack[self.stack_pointer] = val;
+    }
+
+    pub fn stack_pull(&mut self) -> u8 {
+        self.stack_pointer -= 1;
+        if self.stack_pointer < 0 { panic!("{}", ERR_ST); }
+        self.stack[self.stack_pointer]
+    }
 
     pub fn INX(&mut self) -> u8 {
         self.x += 1;
@@ -223,7 +261,7 @@ impl Cpu {
                 self.flag_zero_from_val(res); self.flag_negative_from_val(res); self.flag_overflow(res & 0x40 == 1);
             }
             Instructions::BRK => {
-                self.stack.push(self.pc);
+                self.stack_push_pc();
                 self.PHP();
                 self.pc = 0xFFFE;
                 self.flag_break(true);
@@ -239,11 +277,11 @@ impl Cpu {
                 self.flag_negative_from_val(res); self.flag_zero_from_val(res);
             }
             Instructions::JMP | Instructions::JSR => {
-                if self.instr == Instructions::JSR { self.stack.push(self.pc) }
+                if self.instr == Instructions::JSR { self.stack_push_pc(); }
                 self.pc = target_addr;
             }
             Instructions::RTS => {
-                self.pc = match self.stack.pop() { Some(res) => res, None => panic!("{}", ERR_ST) };
+                self.stack_pull_pc();
             }
             Instructions::LDA | Instructions::LDX | Instructions::LDY => {
                 match self.instr { Instructions::LDA => self.a = target_val, Instructions::LDX => self.x = target_val, Instructions::LDY => self.y = target_val, _ => panic!() };
@@ -251,23 +289,47 @@ impl Cpu {
             }
             Instructions::NOP => (),
             Instructions::PHA => {
-                self.stack.push(self.a as usize);
+                self.stack_push(self.a);
             }
             Instructions::PLA => {
-                self.a = match self.stack.pop() { Some(res) => res as u8, None => panic!("{}", ERR_ST) };
+                self.a = self.stack_pull();
             }
             Instructions::PHP => {
                 self.PHP();
             },
             Instructions::PLP => {
-                let mut all_flags = match self.stack.pop() { Some(res) => res as u8, None => panic!("{}", ERR_ST) };
-                self.n = all_flags & 0b10000000 == 1;
-                self.o = all_flags & 0b01000000 == 1;
-                self.b = all_flags & 0b00100000 == 1;
-                self.d = all_flags & 0b00001000 == 1;
-                self.i = all_flags & 0b00000100 == 1;
-                self.z = all_flags & 0b00000010 == 1;
-                self.c = all_flags & 0b00000001 == 1;
+                self.PLP();
+            },
+            Instructions::RTI => {
+                self.PLP();
+                self.stack_pull_pc();
+            },
+            Instructions::STA => {
+                self.a = target_val;
+            },
+            Instructions::STX => {
+                self.x = target_val;
+            },
+            Instructions::STY => {
+                self.y = target_val;
+            },
+            Instructions::TAX => {
+                self.x = self.a;
+            },
+            Instructions::TAY => {
+                self.y = self.a;
+            },
+            Instructions::TXA => {
+                self.a = self.x;
+            },
+            Instructions::TYA => {
+                self.a = self.y;
+            },
+            Instructions::TSX => {
+                self.x = self.stack_pointer as u8;
+            },
+            Instructions::TXS => {
+                self.stack_pointer = self.x as usize;
             },
             _ => panic!("{}", ERR_OP),
         }
@@ -315,6 +377,7 @@ impl Cpu {
             0x2C => {self.instr = Instructions::BIT; self.addr = Addressing::ABS; cycles = 4},
 
             0x00 => {self.instr = Instructions::BRK; self.addr = Addressing::IMP; cycles = 7},
+            0x40 => {self.instr = Instructions::RTI; self.addr = Addressing::IMP; cycles = 6},
 
             0x50 => {self.instr = Instructions::CLC; self.addr = Addressing::IMP; cycles = 2},
             0xD8 => {self.instr = Instructions::CLD; self.addr = Addressing::IMP; cycles = 2},
@@ -380,12 +443,33 @@ impl Cpu {
             0xEA => {self.instr = Instructions::NOP; self.addr = Addressing::IMP; cycles = 2},
 
             0x48 => {self.instr = Instructions::PHA; self.addr = Addressing::IMP; cycles = 3},
-
             0x68 => {self.instr = Instructions::PLA; self.addr = Addressing::IMP; cycles = 4},
-
             0x08 => {self.instr = Instructions::PHP; self.addr = Addressing::IMP; cycles = 3},
-
             0x28 => {self.instr = Instructions::PLP; self.addr = Addressing::IMP; cycles = 4},
+
+            0x85 => {self.instr = Instructions::STA; self.addr = Addressing::ZPG; cycles = 3},
+            0x95 => {self.instr = Instructions::STA; self.addr = Addressing::ZPX; cycles = 4},
+            0x8D => {self.instr = Instructions::STA; self.addr = Addressing::ABS; cycles = 4},
+            0x9D => {self.instr = Instructions::STA; self.addr = Addressing::ABX; cycles = 5},
+            0x99 => {self.instr = Instructions::STA; self.addr = Addressing::ABY; cycles = 5},
+            0x81 => {self.instr = Instructions::STA; self.addr = Addressing::IDX; cycles = 6},
+            0x91 => {self.instr = Instructions::STA; self.addr = Addressing::IDY; cycles = 6},
+
+            0x86 => {self.instr = Instructions::STX; self.addr = Addressing::ZPG; cycles = 3},
+            0x96 => {self.instr = Instructions::STX; self.addr = Addressing::ZPY; cycles = 4},
+            0x8E => {self.instr = Instructions::STX; self.addr = Addressing::ABS; cycles = 4},
+
+            0x84 => {self.instr = Instructions::STY; self.addr = Addressing::ZPG; cycles = 3},
+            0x94 => {self.instr = Instructions::STY; self.addr = Addressing::ZPX; cycles = 4},
+            0x8C => {self.instr = Instructions::STY; self.addr = Addressing::ABS; cycles = 4},
+
+            0xAA => {self.instr = Instructions::TAX; self.addr = Addressing::IMP; cycles = 2},
+            0xA8 => {self.instr = Instructions::TAY; self.addr = Addressing::IMP; cycles = 2},
+            0x8A => {self.instr = Instructions::TXA; self.addr = Addressing::IMP; cycles = 2},
+            0x98 => {self.instr = Instructions::TYA; self.addr = Addressing::IMP; cycles = 2},
+
+            0xBA => {self.instr = Instructions::TSX; self.addr = Addressing::IMP; cycles = 2},
+            0x9A => {self.instr = Instructions::TXS; self.addr = Addressing::IMP; cycles = 2},
             _ => panic!("{}", ERR_OP),
         }
         cycles
