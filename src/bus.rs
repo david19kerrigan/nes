@@ -19,9 +19,11 @@ impl Bus {
             Ok(res) => res,
             Err(why) => panic!("{}", why),
         };
-        for i in 0..rom.len() {
-            if i + 0xC000 >= 0xFFFF { break; }
-            self.memory[0xC000 + i] = rom[i];
+        for i in 16..rom.len() {
+            //if 0x8000 + i - 16 > memory_size {
+            //    break;
+            //}
+            self.memory[0x8000 + i - 16] = rom[i];
         }
     }
 
