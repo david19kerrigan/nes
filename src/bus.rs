@@ -20,7 +20,8 @@ impl Bus {
             Err(why) => panic!("{}", why),
         };
         for i in 0..rom.len() {
-            self.memory[0x4020 + i] = rom[i];
+            if i + 0xC000 >= 0xFFFF { break; }
+            self.memory[0xC000 + i] = rom[i];
         }
     }
 

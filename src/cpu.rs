@@ -8,6 +8,7 @@ const ERR_CONV: &str = "Error converting u8 to str";
 
 #[rustfmt::skip]
 #[derive(PartialEq)]
+#[derive(Debug)]
 enum Instructions {
     ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
     CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
@@ -17,6 +18,7 @@ enum Instructions {
 
 #[rustfmt::skip]
 #[derive(PartialEq)]
+#[derive(Debug)]
 enum Addressing {
     IMP, ACC, IMM, ZPG, ZPX, ZPY, REL, ABS, ABX, ABY, IND, IDX, IDY,
 }
@@ -61,7 +63,7 @@ impl Cpu {
             o: false,
             n: false,
             // misc
-            instr: Instructions::ADC,
+            instr: Instructions::NOP,
             addr: Addressing::IMM,
             stack: [0; 256],
             stack_pointer: 0,
@@ -186,6 +188,8 @@ impl Cpu {
 
     #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
+        println!("instruction: {:?}", self.instr);
+        println!("addressing: {:?}", self.addr);
         let target_addr = match self.addr {
             Addressing::IMP => 0,
             Addressing::ACC => 0,
@@ -360,6 +364,24 @@ impl Cpu {
             0x16 => {self.instr = Instructions::ASL; self.addr = Addressing::ZPX; cycles = 6},
             0x0E => {self.instr = Instructions::ASL; self.addr = Addressing::ABS; cycles = 6},
             0x1E => {self.instr = Instructions::ASL; self.addr = Addressing::ABX; cycles = 7},
+
+            0x4A => {self.instr = Instructions::LSR; self.addr = Addressing::ACC; cycles = 2},
+            0x46 => {self.instr = Instructions::LSR; self.addr = Addressing::ZPG; cycles = 5},
+            0x56 => {self.instr = Instructions::LSR; self.addr = Addressing::ZPX; cycles = 6},
+            0x4E => {self.instr = Instructions::LSR; self.addr = Addressing::ABS; cycles = 6},
+            0x5E => {self.instr = Instructions::LSR; self.addr = Addressing::ABX; cycles = 7},
+
+            0x2A => {self.instr = Instructions::ROL; self.addr = Addressing::ACC; cycles = 2},
+            0x26 => {self.instr = Instructions::ROL; self.addr = Addressing::ZPG; cycles = 5},
+            0x36 => {self.instr = Instructions::ROL; self.addr = Addressing::ZPX; cycles = 6},
+            0x2E => {self.instr = Instructions::ROL; self.addr = Addressing::ABS; cycles = 6},
+            0x3E => {self.instr = Instructions::ROL; self.addr = Addressing::ABX; cycles = 7},
+
+            0x6A => {self.instr = Instructions::ROR; self.addr = Addressing::ACC; cycles = 2},
+            0x66 => {self.instr = Instructions::ROR; self.addr = Addressing::ZPG; cycles = 5},
+            0x76 => {self.instr = Instructions::ROR; self.addr = Addressing::ZPX; cycles = 6},
+            0x6E => {self.instr = Instructions::ROR; self.addr = Addressing::ABS; cycles = 6},
+            0x7E => {self.instr = Instructions::ROR; self.addr = Addressing::ABX; cycles = 7},
 
             0x90 => {self.instr = Instructions::BCC; self.addr = Addressing::REL; cycles = 2 + !self.c as u8 + bus.cross_rel(self.pc)},
             0xB0 => {self.instr = Instructions::BCS; self.addr = Addressing::REL; cycles = 2 + self.c as u8 + bus.cross_rel(self.pc)},
