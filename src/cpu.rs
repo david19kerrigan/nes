@@ -26,7 +26,7 @@ pub struct Cpu {
     a: u8,
     x: u8,
     y: u8,
-    pc: u16,
+    pub pc: u16,
     s: u8,
     //flags
     c: bool,
@@ -187,6 +187,8 @@ impl Cpu {
     #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus) {
         let target_addr = match self.addr {
+            Addressing::IMP => 0,
+            Addressing::ACC => 0,
             Addressing::IMM => { self.pc += 2; self.pc - 1 },
             Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as u16 },
             Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as u16 },

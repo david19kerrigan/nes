@@ -1,4 +1,5 @@
 use crate::util::*;
+use std::fs::read;
 
 const memory_size: usize = 65535;
 
@@ -10,6 +11,16 @@ impl Bus {
     pub fn new() -> Bus {
         Bus {
             memory: [0; memory_size + 1],
+        }
+    }
+
+    pub fn load_cartridge(&mut self, path: &str) {
+        let rom = match read(path) {
+            Ok(res) => res,
+            Err(why) => panic!("{}", why),
+        };
+        for i in 0..rom.len() {
+            self.memory[0x4020 + i] = rom[i];
         }
     }
 
