@@ -11,9 +11,8 @@ fn main() {
     let mut bus = Bus::new();
     let mut cpu = Cpu::new();
     let mut cycles_left = 0;
-    let mut cycles_total = 0;
+    let mut cycles_total = 7;
 
-    println!("cycle: {}", cycles_total);
     bus.load_cartridge("/home/david/Documents/nes/src/test/nestest.nes");
     cpu.pc = 0xC000;
     println!("cycle: {}", cycles_total);
@@ -24,6 +23,7 @@ fn main() {
         } else if cycles_left == 0 {
             cycles_left = cpu.load_instruction(&mut bus);
             cycles_total += cycles_left;
+			println!("------------------------");
             println!("cycle: {}", cycles_total);
         }
         cycles_left -= 1;

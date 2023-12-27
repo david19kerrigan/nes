@@ -66,8 +66,8 @@ impl Bus {
 
     // Does addressing mode Rel cross the page?
     pub fn cross_rel(&mut self, pc: u16) -> u8 {
-        let low = self.read_16(pc + 1);
-        (pc as u8).overflowing_add(low).1 as u8
+        let low = self.read_16(pc + 1) as i16;
+        (pc + 2).overflowing_add_signed(low).1 as u8
     }
 
     // Does addressing mode Indexed Y cross the page?
