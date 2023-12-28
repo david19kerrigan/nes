@@ -72,7 +72,7 @@ impl Cpu {
 
 	#[rustfmt::skip]
     pub fn PHP(&mut self) {
-        let all_flags = self.flags_to_byte();
+        let all_flags = self.flags_to_byte() | 0b00010000;
         self.stack_push(all_flags);
     }
 
@@ -141,7 +141,8 @@ impl Cpu {
         (self.n as u8) << 7
             | (self.o as u8) << 6
             | 1 << 5
-            | (self.b as u8) << 4
+            //| (self.b as u8) << 4
+			| 0 << 4
             | (self.d as u8) << 3
             | (self.i as u8) << 2
             | (self.z as u8) << 1
@@ -276,7 +277,7 @@ impl Cpu {
             }
             Instructions::BIT => {
                 let res = target_val & self.a;
-                self.flag_zero_from_val(res); self.flag_negative_from_val(res); self.flag_overflow(res & 0x40 == 0x40);
+                self.flag_zero_from_val(res); self.flag_negative_from_val(target_val); self.flag_overflow(target_val & 0b01000000 == 0b01000000);
             }
             Instructions::BRK => {
                 self.stack_push_pc();
@@ -311,6 +312,7 @@ impl Cpu {
             }
             Instructions::PLA => {
                 self.a = self.stack_pull();
+				self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a)
             }
             Instructions::PHP => {
                 self.PHP();
@@ -348,6 +350,8 @@ impl Cpu {
             },
             _ => panic!("{}", ERR_OP),
         }
+        println!("prev target val: {:0x}", target_val);
+        println!("prev target addr: {:0x}", target_addr);
     }
 
     #[rustfmt::skip]
@@ -540,45 +544,47 @@ impl Cpu {
             0x9A => {self.instr = Instructions::TXS; self.addr = Addressing::IMP; cycles = 2},
             _ => panic!("{}", ERR_OP),
         }
+
         println!("instruction: {:?}", self.instr);
-        println!("addressing: {:?}", self.addr);
-        println!("address: {:x}", self.pc);
-        println!("SP: {:x}", self.stack_pointer);
-        println!("P: {:x}", self.flags_to_byte());
-        println!("A: {:x}", self.a);
-        println!("X: {:x}", self.x);
-        println!("Y: {:x}", self.y);
+        println!("addressing mode: {:?}", self.addr);
 
-		let (true_p, my_p) = self.format_internal(&line[9], self.flags_to_byte), 2);
+		let p = self.flags_to_byte();
+		let (true_p, my_p) = self.print_debug_8(&line[9], p, "p");
+		let (true_sp, my_sp) = self.print_debug_8(&line[10], self.stack_pointer, "sp");
+		let (true_a, my_a) = self.print_debug_8(&line[6], self.a, "a");
+		let (true_x, my_x) = self.print_debug_8(&line[7], self.x, "x");
+		let (true_y, my_y) = self.print_debug_8(&line[8], self.y, "y");
+		let (true_addr, my_addr) = self.print_debug_16(&line[0], self.pc, "pc");
 
-		let true_p = line[9].to_uppercase();
-		let my_p = format!("{:02x}", self.flags_to_byte()).to_uppercase();
-		println!("true_p, my_p: {}, {}", true_p, my_p);
-
-		let true_sp = line[10].to_uppercase();
-		let my_sp = format!("{:02x}", self.stack_pointer).to_uppercase();
-		println!("true_sp, my_sp: {}, {}", true_sp, my_sp);
-
-		let true_a = line[6].to_uppercase();
-		let my_a = format!("{:02x}", self.a).to_uppercase();
-		println!("true_a, my_a: {}, {}", true_a, my_a);
-
-		let true_addr = line[0].to_uppercase();
-		let my_addr = format!("{:04x}", self.pc).to_uppercase();
-		println!("true_addr, my_addr: {}, {}", true_addr, my_addr);
-
-		if true_addr != my_addr { panic!("mismatched address"); }
-		if true_p != my_p { panic!("mismatched p"); }
-		if true_a != my_a { panic!("mismatched A"); }
-		if true_sp != my_sp { panic!("mismatched SP"); }
+		self.check_debug(true_p, my_p, "p");
+		self.check_debug(true_addr, my_addr, "addr");
+		self.check_debug(true_a, my_a, "a");
+		self.check_debug(true_x, my_x, "x");
+		self.check_debug(true_y, my_y, "y");
+		self.check_debug(true_sp, my_sp, "sp");
 
         cycles
     }
 
-	pub fn format_internal(&mut self, true_val: &str, my_val: String, digits: u8) -> (String, String) {
-		let true_addr = true_val.to_uppercase();
-		let my_addr = format!("{:04x}", self.pc).to_uppercase();
-		println!("true_addr, my_addr: {}, {}", true_addr, my_addr);
-		(true_addr, my_addr)
+	pub fn check_debug(&mut self, true_val: String, my_val: String, name: &str) {
+		if true_val != my_val {
+			panic!("mismatched {}", name);
+		}
+	}
+
+	pub fn print_debug(&mut self, true_val: &str, my_val: String, name: &str) -> (String, String) {
+		let true_val = true_val.to_uppercase();
+		println!("true_{}, my_{}: {}, {}", name, name, true_val, my_val);
+		(true_val, my_val)
+	}
+
+	pub fn print_debug_8(&mut self, true_val: &str, my_val: u8, name: &str) -> (String, String) {
+		let my_val = format!("{:02x}", my_val).to_uppercase();
+		self.print_debug(true_val, my_val, name)
+	}
+
+	pub fn print_debug_16(&mut self, true_val: &str, my_val: u16, name: &str) -> (String, String) {
+		let my_val = format!("{:04x}", my_val).to_uppercase();
+		self.print_debug(true_val, my_val, name)
 	}
 }
