@@ -1,6 +1,8 @@
 use crate::util::*;
 use crate::Bus;
 
+use csv::StringRecord;
+
 const ERR_OP: &str = "Invalid Opcode";
 const ERR_ADDR: &str = "Invalid Addressing Mode";
 
@@ -62,21 +64,15 @@ impl Cpu {
             instr: Instructions::NOP,
             addr: Addressing::IMM,
             stack: [0; 256],
-            stack_pointer: 0,
+            stack_pointer: 0xFD,
         }
     }
 
     // --------------- INSTRUCTIONS --------------------
 
+	#[rustfmt::skip]
     pub fn PHP(&mut self) {
-        let all_flags = (self.n as u8) << 7
-            | (self.o as u8) << 6
-            | (1 << 5)
-            | (self.b as u8) << 4
-            | (self.d as u8) << 3
-            | (self.i as u8) << 2
-            | (self.z as u8) << 1
-            | (self.c as u8);
+        let all_flags = self.flags_to_byte();
         self.stack_push(all_flags);
     }
 
@@ -84,7 +80,8 @@ impl Cpu {
         let all_flags = self.stack_pull();
         self.n = all_flags & 0b10000000 == 0b10000000;
         self.o = all_flags & 0b01000000 == 0b01000000;
-        self.b = all_flags & 0b00100000 == 0b00100000;
+        //self.b = all_flags & 0b00100000 == 0b00100000;
+        self.b = false;
         self.d = all_flags & 0b00001000 == 0b00001000;
         self.i = all_flags & 0b00000100 == 0b00000100;
         self.z = all_flags & 0b00000010 == 0b00000010;
@@ -96,6 +93,7 @@ impl Cpu {
     pub fn stack_push_pc(&mut self) {
         let low = self.pc as u8;
         let high = (self.pc >> 8) as u8;
+        println!("low, high = {}, {}", low, high);
         self.stack_push(high);
         self.stack_push(low);
     }
@@ -103,16 +101,17 @@ impl Cpu {
     pub fn stack_pull_pc(&mut self) {
         let low = self.stack_pull();
         let high = self.stack_pull();
+        println!("low, high = {}, {}", low, high);
         self.pc = combine_low_high(low, high);
     }
 
     pub fn stack_push(&mut self, val: u8) {
-        self.stack_pointer += 1;
         self.stack[self.stack_pointer as usize] = val;
+        self.stack_pointer -= 1;
     }
 
     pub fn stack_pull(&mut self) -> u8 {
-        self.stack_pointer -= 1;
+        self.stack_pointer += 1;
         self.stack[self.stack_pointer as usize]
     }
 
@@ -138,6 +137,17 @@ impl Cpu {
 
     // --------------- FLAGS --------------------
 
+    pub fn flags_to_byte(&mut self) -> u8 {
+        (self.n as u8) << 7
+            | (self.o as u8) << 6
+            | 1 << 5
+            | (self.b as u8) << 4
+            | (self.d as u8) << 3
+            | (self.i as u8) << 2
+            | (self.z as u8) << 1
+            | (self.c as u8)
+    }
+
     pub fn flag_interrupt(&mut self, interrupt: bool) {
         self.i = interrupt;
     }
@@ -159,11 +169,11 @@ impl Cpu {
     }
 
     pub fn flag_negative(&mut self, negative: bool) {
-        self.b = negative;
+        self.n = negative;
     }
 
     pub fn flag_zero(&mut self, zero: bool) {
-        self.b = zero;
+        self.z = zero;
     }
 
     pub fn flag_negative_from_val(&mut self, val: u8) {
@@ -266,7 +276,7 @@ impl Cpu {
             }
             Instructions::BIT => {
                 let res = target_val & self.a;
-                self.flag_zero_from_val(res); self.flag_negative_from_val(res); self.flag_overflow(res & 0x40 == 1);
+                self.flag_zero_from_val(res); self.flag_negative_from_val(res); self.flag_overflow(res & 0x40 == 0x40);
             }
             Instructions::BRK => {
                 self.stack_push_pc();
@@ -313,13 +323,13 @@ impl Cpu {
                 self.stack_pull_pc();
             },
             Instructions::STA => {
-                self.a = target_val;
+				bus.write_16(target_addr, self.a);
             },
             Instructions::STX => {
-                self.x = target_val;
+				bus.write_16(target_addr, self.x);
             },
             Instructions::STY => {
-                self.y = target_val;
+				bus.write_16(target_addr, self.y);
             },
             Instructions::TAX | Instructions::TSX => {
                 self.x = match self.instr { Instructions::TAX => self.a, Instructions::TSX => self.x, _ => panic!() };
@@ -341,7 +351,7 @@ impl Cpu {
     }
 
     #[rustfmt::skip]
-    pub fn load_instruction(&mut self, bus: &mut Bus) -> u8 {
+    pub fn load_instruction(&mut self, bus: &mut Bus, line: &StringRecord) -> u8 {
         let cycles: u8;
 
         match bus.read_16(self.pc) {
@@ -533,10 +543,42 @@ impl Cpu {
         println!("instruction: {:?}", self.instr);
         println!("addressing: {:?}", self.addr);
         println!("address: {:x}", self.pc);
-        println!("P: {:x}", (self.n as u8) << 7 | (self.o as u8) << 6 | (1 << 5) | (self.b as u8) << 4 | (self.d as u8) << 3 | (self.i as u8) << 2 | (self.z as u8) << 1 | (self.c as u8));
+        println!("SP: {:x}", self.stack_pointer);
+        println!("P: {:x}", self.flags_to_byte());
         println!("A: {:x}", self.a);
         println!("X: {:x}", self.x);
         println!("Y: {:x}", self.y);
+
+		let (true_p, my_p) = self.format_internal(&line[9], self.flags_to_byte), 2);
+
+		let true_p = line[9].to_uppercase();
+		let my_p = format!("{:02x}", self.flags_to_byte()).to_uppercase();
+		println!("true_p, my_p: {}, {}", true_p, my_p);
+
+		let true_sp = line[10].to_uppercase();
+		let my_sp = format!("{:02x}", self.stack_pointer).to_uppercase();
+		println!("true_sp, my_sp: {}, {}", true_sp, my_sp);
+
+		let true_a = line[6].to_uppercase();
+		let my_a = format!("{:02x}", self.a).to_uppercase();
+		println!("true_a, my_a: {}, {}", true_a, my_a);
+
+		let true_addr = line[0].to_uppercase();
+		let my_addr = format!("{:04x}", self.pc).to_uppercase();
+		println!("true_addr, my_addr: {}, {}", true_addr, my_addr);
+
+		if true_addr != my_addr { panic!("mismatched address"); }
+		if true_p != my_p { panic!("mismatched p"); }
+		if true_a != my_a { panic!("mismatched A"); }
+		if true_sp != my_sp { panic!("mismatched SP"); }
+
         cycles
     }
+
+	pub fn format_internal(&mut self, true_val: &str, my_val: String, digits: u8) -> (String, String) {
+		let true_addr = true_val.to_uppercase();
+		let my_addr = format!("{:04x}", self.pc).to_uppercase();
+		println!("true_addr, my_addr: {}, {}", true_addr, my_addr);
+		(true_addr, my_addr)
+	}
 }
