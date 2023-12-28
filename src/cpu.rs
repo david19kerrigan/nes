@@ -49,11 +49,11 @@ impl Cpu {
             a: 0,
             x: 0,
             y: 0,
-            pc: 0,
+            pc: 0x34,
             //flags
             c: false,
             z: false,
-            i: false,
+            i: true,
             d: false,
             b: false,
             o: false,
@@ -69,20 +69,26 @@ impl Cpu {
     // --------------- INSTRUCTIONS --------------------
 
     pub fn PHP(&mut self) {
-        let mut all_flags: u8 = 255;
-        all_flags |= (self.n as u8) << 7 | (self.o as u8) << 6 | (self.b as u8) << 4 | (self.d as u8) << 3 | (self.i as u8) << 2 | (self.z as u8) << 1 | (self.c as u8); 
+        let all_flags = (self.n as u8) << 7
+            | (self.o as u8) << 6
+            | (1 << 5)
+            | (self.b as u8) << 4
+            | (self.d as u8) << 3
+            | (self.i as u8) << 2
+            | (self.z as u8) << 1
+            | (self.c as u8);
         self.stack_push(all_flags);
     }
 
     pub fn PLP(&mut self) {
         let all_flags = self.stack_pull();
-        self.n = all_flags & 0b10000000 == 1;
-        self.o = all_flags & 0b01000000 == 1;
-        self.b = all_flags & 0b00100000 == 1;
-        self.d = all_flags & 0b00001000 == 1;
-        self.i = all_flags & 0b00000100 == 1;
-        self.z = all_flags & 0b00000010 == 1;
-        self.c = all_flags & 0b00000001 == 1;
+        self.n = all_flags & 0b10000000 == 0b10000000;
+        self.o = all_flags & 0b01000000 == 0b01000000;
+        self.b = all_flags & 0b00100000 == 0b00100000;
+        self.d = all_flags & 0b00001000 == 0b00001000;
+        self.i = all_flags & 0b00000100 == 0b00000100;
+        self.z = all_flags & 0b00000010 == 0b00000010;
+        self.c = all_flags & 0b00000001 == 0b00000001;
     }
 
     // --------------- REGISTERS --------------------
@@ -163,17 +169,22 @@ impl Cpu {
     pub fn flag_negative_from_val(&mut self, val: u8) {
         if (val as i8) < 0 {
             self.n = true;
+        } else {
+            self.n = false;
         }
     }
 
     pub fn flag_zero_from_val(&mut self, val: u8) {
         if val == 0 {
             self.z = true;
+        } else {
+            self.z = false;
         }
     }
 
     pub fn flag_overflow_from_vals(&mut self, b: u8, c: u8) {
-        if (self.a > 0 && b > 0 && (c as i8) < 0) || ((self.a as i8) < 0 && (b as i8) < 0 && c > 0) {
+        if (self.a > 0 && b > 0 && (c as i8) < 0) || ((self.a as i8) < 0 && (b as i8) < 0 && c > 0)
+        {
             self.o = true;
         }
     }
@@ -206,7 +217,7 @@ impl Cpu {
                 combine_low_high(low, high).wrapping_add(self.y as u16)
             }
             Addressing::REL => { self.pc += 2; self.pc - 1 },
-            Addressing::IND => { 
+            Addressing::IND => {
                 self.pc += 3;
                 let inline_addr = bus.read_double(self.pc);
                 let low = bus.read_16(inline_addr);
@@ -233,7 +244,7 @@ impl Cpu {
                 self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
-                let op: &dyn Fn(u8) -> (u8) = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!() };
+                let op: &dyn Fn(u8) -> u8 = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!() };
                 if self.addr == Addressing::ACC {
                     self.flag_carry(self.a & 0x80 == 1);
                     self.a = op(self.a);
@@ -247,8 +258,8 @@ impl Cpu {
                     self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val);
                 }
             }
-            Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
-                let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() }; 
+            Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
+                let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
                 if can_branch {
                     self.pc = self.pc.wrapping_add(target_val as u16);
                 }
@@ -521,7 +532,11 @@ impl Cpu {
         }
         println!("instruction: {:?}", self.instr);
         println!("addressing: {:?}", self.addr);
-        println!("address: {:0x}", self.pc);
+        println!("address: {:x}", self.pc);
+        println!("P: {:x}", (self.n as u8) << 7 | (self.o as u8) << 6 | (1 << 5) | (self.b as u8) << 4 | (self.d as u8) << 3 | (self.i as u8) << 2 | (self.z as u8) << 1 | (self.c as u8));
+        println!("A: {:x}", self.a);
+        println!("X: {:x}", self.x);
+        println!("Y: {:x}", self.y);
         cycles
     }
 }

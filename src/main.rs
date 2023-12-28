@@ -1,9 +1,9 @@
-mod cpu;
 mod bus;
+mod cpu;
 mod util;
 
-use cpu::Cpu;
 use bus::Bus;
+use cpu::Cpu;
 
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ fn main() {
         } else if cycles_left == 0 {
             cycles_left = cpu.load_instruction(&mut bus);
             cycles_total += cycles_left;
-			println!("------------------------");
+            println!("------------------------");
             println!("cycle: {}", cycles_total);
         }
         cycles_left -= 1;
