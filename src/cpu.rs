@@ -194,9 +194,13 @@ impl Cpu {
     }
 
     pub fn flag_overflow_from_vals(&mut self, b: u8, c: u8) {
-        if (self.a > 0 && b > 0 && (c as i8) < 0) || ((self.a as i8) < 0 && (b as i8) < 0 && c > 0)
-        {
+        let a = self.a as i8;
+        let b = self.b as i8;
+        let c = self.c as i8;
+        if (a > 0 && b > 0 && c < 0) || (a < 0 && b < 0 && c > 0) {
             self.o = true;
+        } else {
+            self.o = false;
         }
     }
 
@@ -566,25 +570,25 @@ impl Cpu {
         cycles
     }
 
-	pub fn check_debug(&mut self, true_val: String, my_val: String, name: &str) {
-		if true_val != my_val {
-			panic!("mismatched {}", name);
-		}
-	}
+    pub fn check_debug(&mut self, true_val: String, my_val: String, name: &str) {
+        if true_val != my_val {
+            panic!("mismatched {}", name);
+        }
+    }
 
-	pub fn print_debug(&mut self, true_val: &str, my_val: String, name: &str) -> (String, String) {
-		let true_val = true_val.to_uppercase();
-		println!("true_{}, my_{}: {}, {}", name, name, true_val, my_val);
-		(true_val, my_val)
-	}
+    pub fn print_debug(&mut self, true_val: &str, my_val: String, name: &str) -> (String, String) {
+        let true_val = true_val.to_uppercase();
+        println!("true_{}, my_{}: {}, {}", name, name, true_val, my_val);
+        (true_val, my_val)
+    }
 
-	pub fn print_debug_8(&mut self, true_val: &str, my_val: u8, name: &str) -> (String, String) {
-		let my_val = format!("{:02x}", my_val).to_uppercase();
-		self.print_debug(true_val, my_val, name)
-	}
+    pub fn print_debug_8(&mut self, true_val: &str, my_val: u8, name: &str) -> (String, String) {
+        let my_val = format!("{:02x}", my_val).to_uppercase();
+        self.print_debug(true_val, my_val, name)
+    }
 
-	pub fn print_debug_16(&mut self, true_val: &str, my_val: u16, name: &str) -> (String, String) {
-		let my_val = format!("{:04x}", my_val).to_uppercase();
-		self.print_debug(true_val, my_val, name)
-	}
+    pub fn print_debug_16(&mut self, true_val: &str, my_val: u16, name: &str) -> (String, String) {
+        let my_val = format!("{:04x}", my_val).to_uppercase();
+        self.print_debug(true_val, my_val, name)
+    }
 }
