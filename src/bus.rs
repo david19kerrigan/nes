@@ -72,9 +72,12 @@ impl Bus {
 
     // Does addressing mode Indexed Y cross the page?
     pub fn cross_idy(&mut self, pc: u16, offset: u8) -> u8 {
-        let low = self.read_16(pc + 1);
-        let zp = self.read_8(low);
-        combine_low_high(zp, zp + 1)
+        let addr = self.read_16(pc + 1);
+        let low = self.read_8(addr);
+		let (high_addr, overflow) = addr.overflowing_add(1);
+		if overflow {return 1;}
+        let high = self.read_8(high_addr);
+        combine_low_high(low, high)
             .overflowing_add(offset as u16)
             .1 as u8
     }
@@ -83,17 +86,18 @@ impl Bus {
     pub fn cross_abs(&mut self, pc: u16, offset: u8) -> u8 {
         let low = self.read_16(pc + 1);
         let high = self.read_16(pc + 2);
-        self.read_low_high(low, high).overflowing_add(offset).1 as u8
+		println!("crossing {:x} {:x}", combine_low_high(low, high), offset);
+        low.overflowing_add(offset).1 as u8
     }
 
     pub fn DEC(&mut self, addr: u16) -> u8 {
-        let val = self.read_16(addr) - 1;
+        let val = self.read_16(addr).wrapping_sub(1);
         self.write_16(addr, val);
         val
     }
 
     pub fn INC(&mut self, addr: u16) -> u8 {
-        let val = self.read_16(addr) + 1;
+        let val = self.read_16(addr).wrapping_add(1);
         self.write_16(addr, val);
         val
     }

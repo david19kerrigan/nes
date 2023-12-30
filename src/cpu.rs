@@ -227,6 +227,7 @@ impl Cpu {
             Addressing::IMM => { self.pc += 2; self.pc - 1 },
             Addressing::ZPG => { self.pc += 2; bus.read_single(self.pc) as u16 },
             Addressing::ZPX => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.x) as u16 },
+            Addressing::ZPY => { self.pc += 2; bus.read_single(self.pc).wrapping_add(self.y) as u16 },
             Addressing::ABS => { self.pc += 3; bus.read_double(self.pc) as u16 } ,
             Addressing::ABX => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.x as u16) as u16 },
             Addressing::ABY => { self.pc += 3; bus.read_double(self.pc).wrapping_add(self.y as u16) as u16 },
@@ -234,14 +235,14 @@ impl Cpu {
                 self.pc += 2;
                 let inline_addr = bus.read_single(self.pc).wrapping_add(self.x);
                 let low = bus.read_8(inline_addr);
-                let high = bus.read_8(inline_addr + 1);
+                let high = bus.read_8(inline_addr.wrapping_add(1));
                 combine_low_high(low, high)
             }
             Addressing::IDY => {
                 self.pc += 2;
                 let inline_addr = bus.read_single(self.pc);
                 let low = bus.read_8(inline_addr);
-                let high = bus.read_8(inline_addr + 1);
+                let high = bus.read_8(inline_addr.wrapping_add(1));
                 combine_low_high(low, high).wrapping_add(self.y as u16)
             }
             Addressing::REL => { self.pc += 2; self.pc - 1 },
@@ -249,7 +250,8 @@ impl Cpu {
                 self.pc += 3;
                 let inline_addr = bus.read_double(self.pc);
                 let low = bus.read_16(inline_addr);
-                let high = bus.read_16(inline_addr + 1);
+				let high_addr = ((inline_addr as u8).wrapping_add(1) as u16) | (inline_addr & 0xFF00);
+                let high = bus.read_16(high_addr);
                 combine_low_high(low, high)
             },
             _ => panic!("{}", ERR_ADDR),
@@ -278,17 +280,26 @@ impl Cpu {
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
                 let op: &dyn Fn(u8) -> u8 = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!() };
+                let test: u8 = match self.instr { Instructions::ASL | Instructions::ROL => 0x80, Instructions::LSR | Instructions::ROR => 0x01, _ => panic!() };
                 if self.addr == Addressing::ACC {
-                    self.flag_carry(self.a & 0x80 == 1);
+                    let new_carry = self.a & test == test;
                     self.a = op(self.a);
-                    match self.instr { Instructions::ROL | Instructions::ROR => self.a |= self.c as u8, _ => () };
-                    self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a);
+					if self.instr == Instructions::ROL {
+						self.a |= self.c as u8
+					} else if self.instr == Instructions::ROR {
+						self.a |= (self.c as u8) << 7
+					}
+                    self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a); self.flag_carry(new_carry)
                 } else {
-                    self.flag_carry(target_val & 0x80 == 1);
+                    let new_carry = target_val & test == test;
                     let mut modified_val = op(target_val);
-                    match self.instr { Instructions::ROL | Instructions::ROR => modified_val |= self.c as u8, _ => () };
+					if self.instr == Instructions::ROL {
+						modified_val |= self.c as u8
+					} else if self.instr == Instructions::ROR {
+						modified_val |= (self.c as u8) << 7
+					}
                     bus.write_16(target_addr, modified_val);
-                    self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val);
+                    self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val); self.flag_carry(new_carry);
                 }
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
@@ -525,7 +536,7 @@ impl Cpu {
 
             0xA0 => {self.instr = Instructions::LDY; self.addr = Addressing::IMM; cycles = 2},
             0xA4 => {self.instr = Instructions::LDY; self.addr = Addressing::ZPG; cycles = 3},
-            0xB4 => {self.instr = Instructions::LDY; self.addr = Addressing::ZPY; cycles = 4},
+            0xB4 => {self.instr = Instructions::LDY; self.addr = Addressing::ZPX; cycles = 4},
             0xAC => {self.instr = Instructions::LDY; self.addr = Addressing::ABS; cycles = 4},
             0xBC => {self.instr = Instructions::LDY; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
 
@@ -533,7 +544,7 @@ impl Cpu {
             0xA6 => {self.instr = Instructions::LDX; self.addr = Addressing::ZPG; cycles = 3},
             0xB6 => {self.instr = Instructions::LDX; self.addr = Addressing::ZPY; cycles = 4},
             0xAE => {self.instr = Instructions::LDX; self.addr = Addressing::ABS; cycles = 4},
-            0xBE => {self.instr = Instructions::LDX; self.addr = Addressing::ABX; cycles = 4 + bus.cross_abs(self.pc, self.x)},
+            0xBE => {self.instr = Instructions::LDX; self.addr = Addressing::ABY; cycles = 4 + bus.cross_abs(self.pc, self.y)},
 
             0xEA => {self.instr = Instructions::NOP; self.addr = Addressing::IMP; cycles = 2},
 
