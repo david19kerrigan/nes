@@ -28,10 +28,9 @@ fn main() {
             cpu.execute_instruction(&mut bus);
         } else if cycles_left == 0 {
 			let line = rec.next().unwrap().unwrap();
-            cycles_left = cpu.load_instruction(&mut bus, &line);
+            cycles_left = cpu.load_instruction(&mut bus, &line, cycles_total);
             cycles_total += cycles_left as u64;
             println!("------------------------");
-            println!("cycle: {}", cycles_total);
         }
         cycles_left -= 1;
 
