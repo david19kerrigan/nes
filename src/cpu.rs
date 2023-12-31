@@ -70,7 +70,6 @@ impl Cpu {
 
     // --------------- INSTRUCTIONS --------------------
 
-	#[rustfmt::skip]
     pub fn PHP(&mut self, bus: &mut Bus) {
         let all_flags = self.flags_to_byte() | 0b00010000;
         self.stack_push(all_flags, bus);
@@ -88,12 +87,18 @@ impl Cpu {
         self.c = all_flags & 0b00000001 == 0b00000001;
     }
 
+	pub fn ADC(&mut self, b: u8, c: u8) {
+		let (result1, overflow1) = self.a.overflowing_add(b);
+		let (result2, overflow2) = result1.overflowing_add(c as u8);
+		self.flag_zero_from_val(result2); self.flag_negative_from_val(result2); self.flag_carry(overflow1 || overflow2); self.flag_overflow_from_vals(b, result2);
+		self.a = result2;
+	}
+
     // --------------- REGISTERS --------------------
 
     pub fn stack_push_pc(&mut self, bus: &mut Bus) {
         let low = self.pc as u8;
         let high = (self.pc >> 8) as u8;
-        println!("low, high = {}, {}", low, high);
         self.stack_push(high, bus);
         self.stack_push(low, bus);
     }
@@ -101,20 +106,21 @@ impl Cpu {
     pub fn stack_pull_pc(&mut self, bus: &mut Bus) {
         let low = self.stack_pull(bus);
         let high = self.stack_pull(bus);
-        println!("low, high = {}, {}", low, high);
         self.pc = combine_low_high(low, high);
     }
 
     pub fn stack_push(&mut self, val: u8, bus: &mut Bus) {
-        let stack_addr = 1 << 8 | (self.stack_pointer as u16);
-        bus.write_16(stack_addr, val);
+        bus.write_16(self.stack_pointer_to_addr(), val);
         self.stack_pointer -= 1;
     }
 
     pub fn stack_pull(&mut self, bus: &mut Bus) -> u8 {
         self.stack_pointer += 1;
-        let stack_addr = 1 << 8 | (self.stack_pointer as u16);
-        bus.read_16(stack_addr)
+        bus.read_16(self.stack_pointer_to_addr())
+    }
+
+    pub fn stack_pointer_to_addr(&mut self) -> u16 {
+        1 << 8 | (self.stack_pointer as u16)
     }
 
     pub fn INX(&mut self) -> u8 {
@@ -141,14 +147,14 @@ impl Cpu {
 
     pub fn flags_to_byte(&mut self) -> u8 {
         (self.n as u8) << 7
-            | (self.o as u8) << 6
-            | 1 << 5
-            //| (self.b as u8) << 4
-			| 0 << 4
-            | (self.d as u8) << 3
-            | (self.i as u8) << 2
-            | (self.z as u8) << 1
-            | (self.c as u8)
+		| (self.o as u8) << 6
+		| 1 << 5
+		//| (self.b as u8) << 4
+		| 0 << 4
+		| (self.d as u8) << 3
+		| (self.i as u8) << 2
+		| (self.z as u8) << 1
+		| (self.c as u8)
     }
 
     pub fn flag_interrupt(&mut self, interrupt: bool) {
@@ -195,18 +201,7 @@ impl Cpu {
         }
     }
 
-    pub fn flag_overflow_from_vals_sbc(&mut self, b: u8, c: u8) {
-        let a = self.a as i8;
-        let b = b as i8;
-        let c = c as i8;
-        if (a >= 0 && b <= 0 && c <= 0) || (a <= 0 && b >= 0 && c >= 0) {
-            self.o = true;
-        } else {
-            self.o = false;
-        }
-    }
-
-    pub fn flag_overflow_from_vals_adc(&mut self, b: u8, c: u8) {
+    pub fn flag_overflow_from_vals(&mut self, b: u8, c: u8) {
         let a = self.a as i8;
         let b = b as i8;
         let c = c as i8;
@@ -250,7 +245,7 @@ impl Cpu {
                 self.pc += 3;
                 let inline_addr = bus.read_double(self.pc);
                 let low = bus.read_16(inline_addr);
-				let high_addr = ((inline_addr as u8).wrapping_add(1) as u16) | (inline_addr & 0xFF00);
+				let high_addr = ((inline_addr as u8).wrapping_add(1) as u16) | (inline_addr & 0xFF00); // Increment low nibble only
                 let high = bus.read_16(high_addr);
                 combine_low_high(low, high)
             },
@@ -262,16 +257,10 @@ impl Cpu {
 		// --------------- INSTRUCTIONS --------------------
         match self.instr {
             Instructions::ADC => {
-                let (result1, overflow1) = self.a.overflowing_add(target_val);
-                let (result2, overflow2) = result1.overflowing_add(self.c as u8);
-                self.flag_zero_from_val(result2); self.flag_negative_from_val(result2); self.flag_carry(overflow1 || overflow2); self.flag_overflow_from_vals_adc(target_val, result2);
-                self.a = result2;
+				self.ADC(target_val, self.c as u8);
             }
             Instructions::SBC => {
-                let (result1, overflow1) = self.a.overflowing_sub(target_val);
-                let (result2, overflow2) = result1.overflowing_sub(!self.c as u8);
-                self.flag_zero_from_val(result2); self.flag_negative_from_val(result2); self.flag_carry(!overflow1 && !overflow2); self.flag_overflow_from_vals_sbc(target_val, result2);
-                self.a = result2;
+				self.ADC((0 as u8).wrapping_sub(target_val), (0 as u8).wrapping_sub(!self.c as u8));
             }
             Instructions::AND | Instructions::EOR | Instructions::ORA => {
                 let op: &dyn Fn(u8, u8) -> u8 = match self.instr { Instructions::AND => &u8_and, Instructions::ORA => &u8_or, Instructions::EOR => &u8_xor, _ => panic!() };
@@ -280,27 +269,13 @@ impl Cpu {
             }
             Instructions::ASL | Instructions::LSR | Instructions::ROL | Instructions::ROR => {
                 let op: &dyn Fn(u8) -> u8 = match self.instr { Instructions::ASL | Instructions::ROL => &u8_shl, Instructions::LSR | Instructions::ROR => &u8_shr, _ => panic!() };
-                let test: u8 = match self.instr { Instructions::ASL | Instructions::ROL => 0x80, Instructions::LSR | Instructions::ROR => 0x01, _ => panic!() };
-                if self.addr == Addressing::ACC {
-                    let new_carry = self.a & test == test;
-                    self.a = op(self.a);
-					if self.instr == Instructions::ROL {
-						self.a |= self.c as u8
-					} else if self.instr == Instructions::ROR {
-						self.a |= (self.c as u8) << 7
-					}
-                    self.flag_zero_from_val(self.a); self.flag_negative_from_val(self.a); self.flag_carry(new_carry)
-                } else {
-                    let new_carry = target_val & test == test;
-                    let mut modified_val = op(target_val);
-					if self.instr == Instructions::ROL {
-						modified_val |= self.c as u8
-					} else if self.instr == Instructions::ROR {
-						modified_val |= (self.c as u8) << 7
-					}
-                    bus.write_16(target_addr, modified_val);
-                    self.flag_zero_from_val(modified_val); self.flag_negative_from_val(modified_val); self.flag_carry(new_carry);
-                }
+                let mut val: u8 = if self.addr == Addressing::ACC { self.a } else { target_val };
+                let bit_test: u8 = match self.instr { Instructions::ASL | Instructions::ROL => 0x80, Instructions::LSR | Instructions::ROR => 0x01, _ => panic!() };
+				let new_carry = val & bit_test == bit_test;
+				let carry: u8 = match self.instr { Instructions::ROL => self.c as u8, Instructions::ROR => (self.c as u8) << 7, _ => 0 };
+				val = op(val) | carry;
+				self.flag_zero_from_val(val); self.flag_negative_from_val(val); self.flag_carry(new_carry);
+				if self.addr == Addressing::ACC { self.a = val; } else { bus.write_16(target_addr, val); };
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
@@ -384,6 +359,7 @@ impl Cpu {
             },
             _ => panic!("{}", ERR_OP),
         }
+
         println!("prev target val: {:02x}", target_val);
         println!("prev target addr: {:04x}", target_addr);
     }
@@ -591,10 +567,9 @@ impl Cpu {
 		let (true_y, my_y) = self.print_debug_8(&line[8], self.y, "y");
 		let (true_addr, my_addr) = self.print_debug_16(&line[0], self.pc, "pc");
 
-		let abs_pointer = 1 << 8 | self.stack_pointer as u16;
+		let abs_pointer = self.stack_pointer_to_addr();
 		for n in abs_pointer - 5 .. abs_pointer + 5 {
-			print!(" {:02x} {:02x} ", n, bus.read_16(1 << 8 | n as u16));
-			println!();
+			println!(" {:02x} {:02x} ", n, bus.read_16(n));
 		}
 
 		self.check_debug(true_p, my_p, "p");
