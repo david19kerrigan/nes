@@ -31,6 +31,7 @@ impl Bus {
             0 => {
                 for i in 0x10..0x4000 {
                     self.cpu_memory[0x8000 + i - 0x10] = rom[i];
+                    self.cpu_memory[0xC000 + i - 0x10] = rom[i];
                 }
                 for i in 0x4000..0x6000 {
                     self.ppu_memory[0 + i - 0x4000] = rom[i];

@@ -17,32 +17,6 @@ use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-struct Keys {
-    a: u8,
-    b: u8,
-    start: u8,
-    select: u8,
-    up: u8,
-    down: u8,
-    left: u8,
-    right: u8,
-}
-
-impl Keys {
-    fn new() -> Keys {
-        Keys {
-            a: 0,
-            b: 0,
-            start: 0,
-            select: 0,
-            up: 0,
-            down: 0,
-            left: 0,
-            right: 0,
-        }
-    }
-}
-
 fn main() {
     let mut bus = Bus::new();
     let mut cpu = Cpu::new();
