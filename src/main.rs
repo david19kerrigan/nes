@@ -74,153 +74,66 @@ fn main() {
     canvas.present();
 
     // --------------- Inputs ------------------
-
-    let mut keys = Keys::new();
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut start = Instant::now();
 
     loop {
-        let start = Instant::now();
+        let mut input: u8 = 0;
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    return;
+                }
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
+                    Keycode::K => input |= 1 << 7, // A
+                    Keycode::J => input |= 1 << 6, // B
+                    Keycode::KpEnter => input |= 1 << 5, // Select
+                    Keycode::V => input |= 1 << 4, // Start
+                    Keycode::W => input |= 1 << 3, // Up
+                    Keycode::S => input |= 1 << 2, // Down
+                    Keycode::A => input |= 1 << 1, // Left
+                    Keycode::D => input |= 1, // Right
+                    _ => (),
+                },
+				_ => (),
+            }
+        }
 
-        //let mut event_pump = sdl_context.event_pump().unwrap();
-        //for event in event_pump.poll_iter() {
-        //    match event {
-        //        Event::Quit { .. }
-        //        | Event::KeyDown {
-        //            keycode: Some(Keycode::Escape),
-        //            ..
-        //        } => return,
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::K),
-        //            ..
-        //        } => {
-        //            keys.a = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::K),
-        //            ..
-        //        } => {
-        //            keys.a = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::J),
-        //            ..
-        //        } => {
-        //            keys.b = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::J),
-        //            ..
-        //        } => {
-        //            keys.b = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::W),
-        //            ..
-        //        } => {
-        //            keys.up = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::W),
-        //            ..
-        //        } => {
-        //            keys.up = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::S),
-        //            ..
-        //        } => {
-        //            keys.down = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::S),
-        //            ..
-        //        } => {
-        //            keys.down = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::D),
-        //            ..
-        //        } => {
-        //            keys.right = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::D),
-        //            ..
-        //        } => {
-        //            keys.right = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::A),
-        //            ..
-        //        } => {
-        //            keys.left = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::A),
-        //            ..
-        //        } => {
-        //            keys.left = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::KpEnter),
-        //            ..
-        //        } => {
-        //            keys.start = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::KpEnter),
-        //            ..
-        //        } => {
-        //            keys.start = 0;
-        //        }
-        //        Event::KeyDown {
-        //            keycode: Some(Keycode::V),
-        //            ..
-        //        } => {
-        //            keys.select = 1;
-        //        }
-        //        Event::KeyUp {
-        //            keycode: Some(Keycode::V),
-        //            ..
-        //        } => {
-        //            keys.select = 0;
-        //        }
-        //        _ => {}
-        //    }
-        //}
-
-        //let input = keys.a << 7
-        //    | keys.b << 6
-        //    | keys.select << 5
-        //    | keys.start << 4
-        //    | keys.up << 3
-        //    | keys.down << 2
-        //    | keys.left << 1
-        //    | keys.right;
-
-        //bus.write_16(0x4016, input, Component::CPU);
-        //println!("input {}", input);
+        bus.write_16(0x4016, input, Component::CPU);
+        println!("input {}", input);
 
         // --------------- Instructions ------------------
 
-        if cycles_left == 1 {
-            cpu.execute_instruction(&mut bus);
-        } else if cycles_left == 0 {
-            //let line = rec.next().unwrap().unwrap();
-            cycles_left = cpu.load_instruction(&mut bus, cycles_total);
-            cycles_total += cycles_left as u64;
-            //println!("------------------------");
+        for n in 0..29780 {
+            if cycles_left == 1 {
+                cpu.execute_instruction(&mut bus);
+            } else if cycles_left == 0 {
+                //let line = rec.next().unwrap().unwrap();
+                cycles_left = cpu.load_instruction(&mut bus, cycles_total);
+                cycles_total += cycles_left as u64;
+                //println!("------------------------");
+            }
+            cycles_left -= 1;
         }
-        cycles_left -= 1;
 
         // --------------- Timing ------------------
 
         let duration = start.elapsed();
-        let greatest_sleep = Duration::from_nanos(559);
+        let greatest_sleep = Duration::from_millis(17);
         if duration < greatest_sleep {
+			println!("LESS");
             let sleep_time = greatest_sleep - duration;
             std::thread::sleep(sleep_time);
-        } else {
-            println!("duration {}", duration.as_nanos());
-        }
+        } else{
+			println!("MORE");
+		}
+        start = Instant::now();
     }
 }
