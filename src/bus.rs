@@ -29,11 +29,13 @@ impl Bus {
 
         match mapper {
             0 => {
-                for i in 0x10..0x4000 {
+                for i in 0x10..0x4010 {
                     self.cpu_memory[0x8000 + i - 0x10] = rom[i];
+					println!("a {:04x}", 0x8000 + i - 0x10);
                     self.cpu_memory[0xC000 + i - 0x10] = rom[i];
+					println!("b {:04x}", 0xC000 + i - 0x10);
                 }
-                for i in 0x4000..0x6000 {
+                for i in 0x4010..0x6010 {
                     self.ppu_memory[0 + i - 0x4000] = rom[i];
                 }
             }

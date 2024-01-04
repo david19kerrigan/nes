@@ -1,10 +1,12 @@
 mod bus;
 mod cpu;
 mod util;
+mod ppu;
 
 use crate::util::*;
 use bus::Bus;
 use cpu::Cpu;
+use ppu::Ppu;
 
 use csv::Reader;
 use sdl2::event::Event;
@@ -28,7 +30,7 @@ fn main() {
     let mut rec = rdr.records();
 
     bus.load_cartridge("/home/david/Documents/nes/src/test/nestest.nes");
-    cpu.pc = 0xFFFC;
+    cpu.pc = combine_low_high(bus.read_16(0xFFFC, Component::CPU), bus.read_16(0xFFFD, Component::CPU));
     println!("cycle: {}", cycles_total);
 
     // --------------- SDL ------------------
@@ -92,7 +94,7 @@ fn main() {
                 //let line = rec.next().unwrap().unwrap();
                 cycles_left = cpu.load_instruction(&mut bus, cycles_total);
                 cycles_total += cycles_left as u64;
-                //println!("------------------------");
+                println!("------------------------");
             }
             cycles_left -= 1;
         }

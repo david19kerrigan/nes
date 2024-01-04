@@ -2,6 +2,7 @@ use crate::util::*;
 use crate::Bus;
 
 use csv::StringRecord;
+use sdl2::libc::NFT_META_CPU;
 
 const ERR_OP: &str = "Invalid Opcode";
 const ERR_ADDR: &str = "Invalid Addressing Mode";
@@ -360,15 +361,18 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        //println!("prev target val: {:02x}", target_val);
-        //println!("prev target addr: {:04x}", target_addr);
+        println!("prev target val: {:02x}", target_val);
+        println!("prev target addr: {:04x}", target_addr);
     }
 
     #[rustfmt::skip]
     pub fn load_instruction(&mut self, bus: &mut Bus, cycles_total: u64) -> u8 {
         let cycles: u8;
+		let opcode = bus.read_16(self.pc, Component::CPU);
+        println!("opcode: {:02x}", opcode);
+        println!("PC: {:04x}", self.pc);
 
-        match bus.read_16(self.pc, Component::CPU) {
+        match opcode {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
             0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3},
             0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4},
@@ -555,8 +559,8 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        //println!("instruction: {:?}", self.instr);
-        //println!("addressing mode: {:?}", self.addr);
+        println!("instruction: {:?}", self.instr);
+        println!("addressing mode: {:?}", self.addr);
 
 		//let p = self.flags_to_byte();
 		//let (true_cyc, my_cyc) = self.print_debug_int(&line[13], cycles_total, "cyc");
