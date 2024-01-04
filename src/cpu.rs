@@ -110,13 +110,13 @@ impl Cpu {
     }
 
     pub fn stack_push(&mut self, val: u8, bus: &mut Bus) {
-        bus.write_16(self.stack_pointer_to_addr(), val);
-        self.stack_pointer -= 1;
+        bus.write_16(self.stack_pointer_to_addr(), val, Component::CPU);
+		self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
     pub fn stack_pull(&mut self, bus: &mut Bus) -> u8 {
-        self.stack_pointer += 1;
-        bus.read_16(self.stack_pointer_to_addr())
+		self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+        bus.read_16(self.stack_pointer_to_addr(), Component::CPU)
     }
 
     pub fn stack_pointer_to_addr(&mut self) -> u16 {
@@ -244,15 +244,15 @@ impl Cpu {
             Addressing::IND => {
                 self.pc += 3;
                 let inline_addr = bus.read_double(self.pc);
-                let low = bus.read_16(inline_addr);
+                let low = bus.read_16(inline_addr, Component::CPU);
 				let high_addr = ((inline_addr as u8).wrapping_add(1) as u16) | (inline_addr & 0xFF00); // Increment low nibble only
-                let high = bus.read_16(high_addr);
+                let high = bus.read_16(high_addr, Component::CPU);
                 combine_low_high(low, high)
             },
             _ => panic!("{}", ERR_ADDR),
         };
 
-        let target_val = bus.read_16(target_addr);
+        let target_val = bus.read_16(target_addr, Component::CPU);
 
 		// --------------- INSTRUCTIONS --------------------
         match self.instr {
@@ -275,7 +275,7 @@ impl Cpu {
 				let carry: u8 = match self.instr { Instructions::ROL => self.c as u8, Instructions::ROR => (self.c as u8) << 7, _ => 0 };
 				val = op(val) | carry;
 				self.flag_zero_from_val(val); self.flag_negative_from_val(val); self.flag_carry(new_carry);
-				if self.addr == Addressing::ACC { self.a = val; } else { bus.write_16(target_addr, val); };
+				if self.addr == Addressing::ACC { self.a = val; } else { bus.write_16(target_addr, val, Component::CPU); };
             }
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
@@ -334,13 +334,13 @@ impl Cpu {
                 self.stack_pull_pc(bus);
             },
             Instructions::STA => {
-				bus.write_16(target_addr, self.a);
+				bus.write_16(target_addr, self.a, Component::CPU);
             },
             Instructions::STX => {
-				bus.write_16(target_addr, self.x);
+				bus.write_16(target_addr, self.x, Component::CPU);
             },
             Instructions::STY => {
-				bus.write_16(target_addr, self.y);
+				bus.write_16(target_addr, self.y, Component::CPU);
             },
             Instructions::TAX | Instructions::TSX => {
                 self.x = match self.instr { Instructions::TAX => self.a, Instructions::TSX => self.stack_pointer, _ => panic!() };
@@ -360,15 +360,15 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        println!("prev target val: {:02x}", target_val);
-        println!("prev target addr: {:04x}", target_addr);
+        //println!("prev target val: {:02x}", target_val);
+        //println!("prev target addr: {:04x}", target_addr);
     }
 
     #[rustfmt::skip]
-    pub fn load_instruction(&mut self, bus: &mut Bus, line: &StringRecord, cycles_total: u64) -> u8 {
+    pub fn load_instruction(&mut self, bus: &mut Bus, cycles_total: u64) -> u8 {
         let cycles: u8;
 
-        match bus.read_16(self.pc) {
+        match bus.read_16(self.pc, Component::CPU) {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
             0x65 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPG; cycles = 3},
             0x75 => {self.instr = Instructions::ADC; self.addr = Addressing::ZPX; cycles = 4},
@@ -555,30 +555,30 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        println!("instruction: {:?}", self.instr);
-        println!("addressing mode: {:?}", self.addr);
+        //println!("instruction: {:?}", self.instr);
+        //println!("addressing mode: {:?}", self.addr);
 
-		let p = self.flags_to_byte();
-		let (true_cyc, my_cyc) = self.print_debug_int(&line[13], cycles_total, "cyc");
-		let (true_p, my_p) = self.print_debug_8(&line[9], p, "p");
-		let (true_sp, my_sp) = self.print_debug_8(&line[10], self.stack_pointer, "sp");
-		let (true_a, my_a) = self.print_debug_8(&line[6], self.a, "a");
-		let (true_x, my_x) = self.print_debug_8(&line[7], self.x, "x");
-		let (true_y, my_y) = self.print_debug_8(&line[8], self.y, "y");
-		let (true_addr, my_addr) = self.print_debug_16(&line[0], self.pc, "pc");
+		//let p = self.flags_to_byte();
+		//let (true_cyc, my_cyc) = self.print_debug_int(&line[13], cycles_total, "cyc");
+		//let (true_p, my_p) = self.print_debug_8(&line[9], p, "p");
+		//let (true_sp, my_sp) = self.print_debug_8(&line[10], self.stack_pointer, "sp");
+		//let (true_a, my_a) = self.print_debug_8(&line[6], self.a, "a");
+		//let (true_x, my_x) = self.print_debug_8(&line[7], self.x, "x");
+		//let (true_y, my_y) = self.print_debug_8(&line[8], self.y, "y");
+		//let (true_addr, my_addr) = self.print_debug_16(&line[0], self.pc, "pc");
 
-		let abs_pointer = self.stack_pointer_to_addr();
-		for n in abs_pointer - 5 .. abs_pointer + 5 {
-			println!(" {:02x} {:02x} ", n, bus.read_16(n));
-		}
+		//let abs_pointer = self.stack_pointer_to_addr();
+		//for n in abs_pointer - 5 .. abs_pointer + 5 {
+		//	println!(" {:02x} {:02x} ", n, bus.read_16(n, Component::CPU));
+		//}
 
-		self.check_debug(true_p, my_p, "p");
-		self.check_debug(true_addr, my_addr, "addr");
-		self.check_debug(true_a, my_a, "a");
-		self.check_debug(true_x, my_x, "x");
-		self.check_debug(true_y, my_y, "y");
-		self.check_debug(true_sp, my_sp, "sp");
-		self.check_debug(true_cyc, my_cyc, "cyc");
+		// self.check_debug(true_p, my_p, "p");
+		// self.check_debug(true_addr, my_addr, "addr");
+		// self.check_debug(true_a, my_a, "a");
+		// self.check_debug(true_x, my_x, "x");
+		// self.check_debug(true_y, my_y, "y");
+		// self.check_debug(true_sp, my_sp, "sp");
+		// self.check_debug(true_cyc, my_cyc, "cyc");
 
         cycles
     }
