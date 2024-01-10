@@ -71,29 +71,38 @@ impl Cpu {
 
     // --------------- INSTRUCTIONS --------------------
 
+    pub fn Reset(&mut self, bus: &mut Bus) {
+        self.pc = combine_low_high(
+            bus.read_16(0xFFFC, Component::CPU),
+            bus.read_16(0xFFFD, Component::CPU),
+        );
+    }
+
     pub fn PHP(&mut self, bus: &mut Bus) {
-        let all_flags = self.flags_to_byte() | 0b00010000;
+        let all_flags = set_u8_bit(self.flags_to_byte(), 4, 1);
         self.stack_push(all_flags, bus);
     }
 
     pub fn PLP(&mut self, bus: &mut Bus) {
         let all_flags = self.stack_pull(bus);
-        self.n = all_flags & 0b10000000 == 0b10000000;
-        self.o = all_flags & 0b01000000 == 0b01000000;
-        //self.b = all_flags & 0b00100000 == 0b00100000;
-        self.b = false;
-        self.d = all_flags & 0b00001000 == 0b00001000;
-        self.i = all_flags & 0b00000100 == 0b00000100;
-        self.z = all_flags & 0b00000010 == 0b00000010;
-        self.c = all_flags & 0b00000001 == 0b00000001;
+        self.n = get_u8_bit(all_flags, 7) == 1;
+        self.o = get_u8_bit(all_flags, 6) == 1;
+        self.b = get_u8_bit(all_flags, 4) == 1;
+        self.d = get_u8_bit(all_flags, 3) == 1;
+        self.i = get_u8_bit(all_flags, 2) == 1;
+        self.z = get_u8_bit(all_flags, 1) == 1;
+        self.c = get_u8_bit(all_flags, 0) == 1;
     }
 
-	pub fn ADC(&mut self, b: u8, c: u8) {
-		let (result1, overflow1) = self.a.overflowing_add(b);
-		let (result2, overflow2) = result1.overflowing_add(c as u8);
-		self.flag_zero_from_val(result2); self.flag_negative_from_val(result2); self.flag_carry(overflow1 || overflow2); self.flag_overflow_from_vals(b, result2);
-		self.a = result2;
-	}
+    pub fn ADC(&mut self, b: u8, c: u8) {
+        let (result1, overflow1) = self.a.overflowing_add(b);
+        let (result2, overflow2) = result1.overflowing_add(c as u8);
+        self.flag_zero_from_val(result2);
+        self.flag_negative_from_val(result2);
+        self.flag_carry(overflow1 || overflow2);
+        self.flag_overflow_from_vals(b, result2);
+        self.a = result2;
+    }
 
     // --------------- REGISTERS --------------------
 
@@ -112,11 +121,11 @@ impl Cpu {
 
     pub fn stack_push(&mut self, val: u8, bus: &mut Bus) {
         bus.write_16(self.stack_pointer_to_addr(), val, Component::CPU);
-		self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+        self.stack_pointer = self.stack_pointer.wrapping_sub(1);
     }
 
     pub fn stack_pull(&mut self, bus: &mut Bus) -> u8 {
-		self.stack_pointer = self.stack_pointer.wrapping_sub(1);
+        self.stack_pointer = self.stack_pointer.wrapping_add(1);
         bus.read_16(self.stack_pointer_to_addr(), Component::CPU)
     }
 
@@ -281,12 +290,13 @@ impl Cpu {
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
                 if can_branch {
-                    self.pc = self.pc.wrapping_add(target_val as u16);
+					let low = (self.pc as u8).wrapping_add_signed(target_val as i8) as u8;
+					self.pc = combine_low_high(low, (self.pc >> 8) as u8);
                 }
             }
             Instructions::BIT => {
                 let res = target_val & self.a;
-                self.flag_zero_from_val(res); self.flag_negative_from_val(target_val); self.flag_overflow(target_val & 0b01000000 == 0b01000000);
+                self.flag_zero_from_val(res); self.flag_negative_from_val(target_val); self.flag_overflow(get_u8_bit(target_val, 6) == 1);
             }
             Instructions::BRK => {
                 self.stack_push_pc(bus);
@@ -366,11 +376,10 @@ impl Cpu {
     }
 
     #[rustfmt::skip]
-    pub fn load_instruction(&mut self, bus: &mut Bus, cycles_total: u64) -> u8 {
+    pub fn load_instruction(&mut self, bus: &mut Bus) -> (u8, u8, u8, u8, u8, u8, u16) {
         let cycles: u8;
 		let opcode = bus.read_16(self.pc, Component::CPU);
         println!("opcode: {:02x}", opcode);
-        println!("PC: {:04x}", self.pc);
 
         match opcode {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
@@ -561,55 +570,15 @@ impl Cpu {
 
         println!("instruction: {:?}", self.instr);
         println!("addressing mode: {:?}", self.addr);
+		println!("pc {:04x}", self.pc);
 
-		//let p = self.flags_to_byte();
-		//let (true_cyc, my_cyc) = self.print_debug_int(&line[13], cycles_total, "cyc");
-		//let (true_p, my_p) = self.print_debug_8(&line[9], p, "p");
-		//let (true_sp, my_sp) = self.print_debug_8(&line[10], self.stack_pointer, "sp");
-		//let (true_a, my_a) = self.print_debug_8(&line[6], self.a, "a");
-		//let (true_x, my_x) = self.print_debug_8(&line[7], self.x, "x");
-		//let (true_y, my_y) = self.print_debug_8(&line[8], self.y, "y");
-		//let (true_addr, my_addr) = self.print_debug_16(&line[0], self.pc, "pc");
-
-		//let abs_pointer = self.stack_pointer_to_addr();
-		//for n in abs_pointer - 5 .. abs_pointer + 5 {
-		//	println!(" {:02x} {:02x} ", n, bus.read_16(n, Component::CPU));
-		//}
-
-		// self.check_debug(true_p, my_p, "p");
-		// self.check_debug(true_addr, my_addr, "addr");
-		// self.check_debug(true_a, my_a, "a");
-		// self.check_debug(true_x, my_x, "x");
-		// self.check_debug(true_y, my_y, "y");
-		// self.check_debug(true_sp, my_sp, "sp");
-		// self.check_debug(true_cyc, my_cyc, "cyc");
-
-        cycles
+        (cycles, self.flags_to_byte(), self.stack_pointer, self.a, self.x, self.y, self.pc)
     }
 
-    pub fn check_debug(&mut self, true_val: String, my_val: String, name: &str) {
-        if true_val != my_val {
-            panic!("mismatched {}", name);
+    pub fn print_stack(&mut self, bus: &mut Bus) {
+        let abs_pointer = self.stack_pointer_to_addr();
+        for n in abs_pointer - 5..abs_pointer + 5 {
+            println!(" {:02x} {:02x} ", n, bus.read_16(n, Component::CPU));
         }
-    }
-
-    pub fn print_debug(&mut self, true_val: &str, my_val: String, name: &str) -> (String, String) {
-        let true_val = true_val.to_uppercase();
-        println!("true_{}, my_{}: {}, {}", name, name, true_val, my_val);
-        (true_val, my_val)
-    }
-
-    pub fn print_debug_8(&mut self, true_val: &str, my_val: u8, name: &str) -> (String, String) {
-        let my_val = format!("{:02x}", my_val).to_uppercase();
-        self.print_debug(true_val, my_val, name)
-    }
-
-    pub fn print_debug_16(&mut self, true_val: &str, my_val: u16, name: &str) -> (String, String) {
-        let my_val = format!("{:04x}", my_val).to_uppercase();
-        self.print_debug(true_val, my_val, name)
-    }
-
-    pub fn print_debug_int(&mut self, true_val: &str, my_val: u64, name: &str) -> (String, String) {
-        self.print_debug(true_val, my_val.to_string(), name)
     }
 }
