@@ -1,8 +1,16 @@
 use crate::util::*;
+use crate::Ppu;
 use std::fs::read;
 
 const cpu_memory_size: usize = 65535;
 const ppu_memory_size: usize = 16384;
+
+const OAM_ADDR: u16 = 0x2003;
+const OAM_DATA: u16 = 0x2004;
+const SCROLL: u16 = 0x2005;
+const ADDR: u16 = 0x2006;
+const DATA: u16 = 0x2007;
+const OAM_DMA: u16 = 0x4014;
 
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
@@ -41,90 +49,111 @@ impl Bus {
         }
     }
 
-    pub fn check_addr_in_range(&mut self, addr: usize, component: &Component) {
+    pub fn ppu_check_addr_in_range(&mut self, addr: usize) {
+        if addr > ppu_memory_size {
+            panic!("bus memory address out of range");
+        }
+    }
+
+    pub fn cpu_check_addr_in_range(&mut self, addr: usize) {
         if addr > cpu_memory_size {
             panic!("bus memory address out of range");
         }
     }
 
-    pub fn write_16(&mut self, addr: u16, val: u8, component: Component) {
+    pub fn ppu_write_16(&mut self, addr: u16, val: u8) {
         let u_addr = addr as usize;
-        self.check_addr_in_range(u_addr, &component);
-		if component == Component::CPU {
-			self.cpu_memory[u_addr] = val;
-		} else if component == Component::PPU {
-			self.ppu_memory[u_addr] = val;
-		}
+        self.ppu_check_addr_in_range(u_addr);
+        self.ppu_memory[u_addr] = val;
+	}
+
+    pub fn cpu_write_16(&mut self, addr: u16, val: u8) {
+        let u_addr = addr as usize;
+        self.cpu_check_addr_in_range(u_addr);
+        self.cpu_memory[u_addr] = val;
+	}
+
+    pub fn cpu_write_16_ppu_regs(&mut self, addr: u16, val: u8, ppu: &mut Ppu) {
+        let mut mut_addr = addr;
+        if mut_addr < 0x4000 && mut_addr >= 0x2000 {
+            if mut_addr > 0x2007 {
+                mut_addr = (mut_addr - 0x2000) % 8;
+            }
+        }
+        if mut_addr == DATA {
+			ppu.write_data(val, self);
+        } else if mut_addr == ADDR {
+			ppu.write_addr(val);
+        } else if mut_addr == OAM_DATA {
+        } else if mut_addr == OAM_ADDR {
+        } else if mut_addr == OAM_DMA {
+        }
+
+		self.cpu_write_16(mut_addr, val);
     }
 
     // Read address in memory from a low and a high byte in low endian
-    pub fn read_low_high(&mut self, low: u8, high: u8) -> u8 {
-        self.read_16(combine_low_high(low, high), Component::CPU)
+    pub fn cpu_read_low_high(&mut self, low: u8, high: u8) -> u8 {
+        self.cpu_read_16(combine_low_high(low, high))
     }
 
     // Read zero page address
-    pub fn read_8(&mut self, addr: u8) -> u8 {
-        self.read_16(addr as u16, Component::CPU)
+    pub fn cpu_read_8(&mut self, addr: u8) -> u8 {
+        self.cpu_read_16(addr as u16)
     }
 
     // Read absolute address
-    pub fn read_16(&mut self, addr: u16, component: Component) -> u8 {
+    pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
         let u_addr = addr as usize;
-        self.check_addr_in_range(u_addr, &component);
-		if component == Component::CPU {
-			self.cpu_memory[u_addr]
-		} else if component == Component::PPU {
-			self.ppu_memory[u_addr]
-		} else{
-			panic!("oh shit homie");
-		}
+        self.cpu_check_addr_in_range(u_addr);
+        self.cpu_memory[u_addr]
     }
 
     // Read one byte in relation to the PC
     pub fn read_single(&mut self, addr: u16) -> u8 {
-        self.read_16(addr - 1, Component::CPU)
+        self.cpu_read_16(addr - 1)
     }
 
     // Read two bytes in relation to the PC
     pub fn read_double(&mut self, addr: u16) -> u16 {
-        combine_low_high(self.read_16(addr - 2, Component::CPU), self.read_16(addr - 1, Component::CPU))
+        combine_low_high(self.cpu_read_16(addr - 2), self.cpu_read_16(addr - 1))
     }
 
     // Does addressing mode Rel cross the page?
     pub fn cross_rel(&mut self, pc: u16) -> u8 {
-        let low = self.read_16(pc + 1, Component::CPU) as i16;
+        let low = self.cpu_read_16(pc + 1) as i16;
         (pc + 2).overflowing_add_signed(low).1 as u8
     }
 
     // Does addressing mode Indexed Y cross the page?
     pub fn cross_idy(&mut self, pc: u16, offset: u8) -> u8 {
-        let addr = self.read_16(pc + 1, Component::CPU);
-        let low = self.read_8(addr);
+        let addr = self.cpu_read_16(pc + 1);
+        let low = self.cpu_read_8(addr);
         let (high_addr, overflow) = addr.overflowing_add(1);
         if overflow {
             return 1;
         }
-        let high = self.read_8(high_addr);
+        let high = self.cpu_read_8(high_addr);
         combine_low_high(low, high).overflowing_add(offset as u16).1 as u8
     }
 
     // Does addressing mode Indexed X cross the page?
     pub fn cross_abs(&mut self, pc: u16, offset: u8) -> u8 {
-        let low = self.read_16(pc + 1, Component::CPU);
-        let high = self.read_16(pc + 2, Component::CPU);
+        let low = self.cpu_read_16(pc + 1);
+        let high = self.cpu_read_16(pc + 2);
         println!("crossing {:x} {:x}", combine_low_high(low, high), offset);
         low.overflowing_add(offset).1 as u8
     }
 
     pub fn DEC(&mut self, addr: u16) -> u8 {
-        let val = self.read_16(addr, Component::CPU).wrapping_sub(1);
-        self.write_16(addr, val, Component::CPU);
+        let val = self.cpu_read_16(addr).wrapping_sub(1);
+        self.cpu_write_16(addr, val);
         val
     }
 
     pub fn INC(&mut self, addr: u16) -> u8 {
-        let val = self.read_16(addr, Component::CPU).wrapping_add(1);
-        self.write_16(addr, val, Component::CPU);
+        let val = self.cpu_read_16(addr).wrapping_add(1);
+        self.cpu_write_16(addr, val);
         val
     }
 }

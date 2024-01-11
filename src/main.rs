@@ -31,10 +31,10 @@ fn main() {
 
     // --------------- Testing ------------------
 
-    cpu.pc = 0xC000;
-    let file = File::open("/home/david/Documents/nes/src/test/nestest2.log").unwrap();
-    let mut rdr = Reader::from_reader(file);
-    let mut rec = rdr.records();
+    //cpu.pc = 0xC000;
+    //let file = File::open("/home/david/Documents/nes/src/test/nestest2.log").unwrap();
+    //let mut rdr = Reader::from_reader(file);
+    //let mut rec = rdr.records();
 
     // --------------- SDL ------------------
 
@@ -98,26 +98,29 @@ fn main() {
             }
         }
 
-        bus.write_16(0x4016, input, Component::CPU);
-        //println!("input {}", input);
+        bus.cpu_write_16(0x4016, input);
 
         // --------------- Instructions ------------------
 
         for n in 0..29780 {
             if cycles_left == 1 {
-                cpu.execute_instruction(&mut bus);
+                cpu.execute_instruction(&mut bus, &mut ppu);
             } else if cycles_left == 0 {
                 let (temp, p, sp, a, x, y, addr) = cpu.load_instruction(&mut bus);
 				cycles_left = temp;
 
-                let line = rec.next().unwrap().unwrap();
-				check_attribute_128(&line[13], cycles_total, "cyc");
-				check_attribute_8(&line[9], p, "p");
-				check_attribute_8(&line[10], sp, "sp");
-				check_attribute_8(&line[6], a, "a");
-				check_attribute_8(&line[7], x, "x");
-				check_attribute_8(&line[8], y, "y");
-				check_attribute_16(&line[0], addr, "addr");
+				// --------------- Testing ------------------
+
+                //let line = rec.next().unwrap().unwrap();
+				//check_attribute_128(&line[13], cycles_total, "cyc");
+				//check_attribute_8(&line[9], p, "p");
+				//check_attribute_8(&line[10], sp, "sp");
+				//check_attribute_8(&line[6], a, "a");
+				//check_attribute_8(&line[7], x, "x");
+				//check_attribute_8(&line[8], y, "y");
+				//check_attribute_16(&line[0], addr, "addr");
+	
+				// ------------------------------------------
 
                 cycles_total += cycles_left as u128;
                 println!("------------------------");

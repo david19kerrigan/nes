@@ -1,10 +1,3 @@
-#[derive(PartialEq)]
-pub enum Component {
-    CPU,
-    PPU,
-    APU,
-}
-
 // Little endian conversion
 pub fn combine_low_high(low: u8, high: u8) -> u16 {
     low as u16 | (high as u16) << 8
@@ -28,14 +21,6 @@ pub fn u8_shl(a: u8) -> u8 {
 
 pub fn u8_shr(a: u8) -> u8 {
     a >> 1
-}
-
-pub fn set_u8_bits(num: u8, val: u8, l: u8, r: u8) -> u8 {
-    let mut new_num = num;
-    for n in r..l {
-        new_num = set_u8_bit(new_num, n, get_u8_bit(val, n - r));
-    }
-    new_num
 }
 
 pub fn set_u8_bit(num: u8, bit: u8, val: u8) -> u8 {
