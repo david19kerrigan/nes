@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 fn main() {
     let mut bus = Bus::new();
     let mut cpu = Cpu::new();
-	let mut ppu = Ppu::new();
+    let mut ppu = Ppu::new();
     let mut cycles_left = 0;
     let mut cycles_total: u128 = 7;
 
@@ -107,29 +107,29 @@ fn main() {
                 cpu.execute_instruction(&mut bus, &mut ppu);
             } else if cycles_left == 0 {
                 let (temp, p, sp, a, x, y, addr) = cpu.load_instruction(&mut bus);
-				cycles_left = temp;
+                cycles_left = temp;
 
-				// --------------- Testing ------------------
+                // --------------- Testing ------------------
 
                 //let line = rec.next().unwrap().unwrap();
-				//check_attribute_128(&line[13], cycles_total, "cyc");
-				//check_attribute_8(&line[9], p, "p");
-				//check_attribute_8(&line[10], sp, "sp");
-				//check_attribute_8(&line[6], a, "a");
-				//check_attribute_8(&line[7], x, "x");
-				//check_attribute_8(&line[8], y, "y");
-				//check_attribute_16(&line[0], addr, "addr");
-	
-				// ------------------------------------------
+                //check_attribute_128(&line[13], cycles_total, "cyc");
+                //check_attribute_8(&line[9], p, "p");
+                //check_attribute_8(&line[10], sp, "sp");
+                //check_attribute_8(&line[6], a, "a");
+                //check_attribute_8(&line[7], x, "x");
+                //check_attribute_8(&line[8], y, "y");
+                //check_attribute_16(&line[0], addr, "addr");
+
+                // ------------------------------------------
 
                 cycles_total += cycles_left as u128;
                 println!("------------------------");
             }
             cycles_left -= 1;
 
-			for m in 0..2 {
-				ppu.tick(&mut bus);
-			}
+            for m in 0..2 {
+                ppu.tick(&mut bus);
+            }
         }
 
         // --------------- Timing ------------------
@@ -145,25 +145,31 @@ fn main() {
 }
 
 fn check_attribute_16(true_val: &str, my_val: u16, name: &str) {
-	let parsed_val = u16::from_str_radix(true_val, 16).unwrap();
-	println!("true {}, my {} = {:04x}, {:04x}", name, name, parsed_val, my_val);
-	if parsed_val != my_val {
-		panic!("mismatched {}", name);
-	}
+    let parsed_val = u16::from_str_radix(true_val, 16).unwrap();
+    println!(
+        "true {}, my {} = {:04x}, {:04x}",
+        name, name, parsed_val, my_val
+    );
+    if parsed_val != my_val {
+        panic!("mismatched {}", name);
+    }
 }
 
 fn check_attribute_8(true_val: &str, my_val: u8, name: &str) {
-	let parsed_val = u8::from_str_radix(true_val, 16).unwrap();
-	println!("true {}, my {} = {:02x}, {:02x}", name, name, parsed_val, my_val);
-	if parsed_val != my_val {
-		panic!("mismatched {}", name);
-	}
+    let parsed_val = u8::from_str_radix(true_val, 16).unwrap();
+    println!(
+        "true {}, my {} = {:02x}, {:02x}",
+        name, name, parsed_val, my_val
+    );
+    if parsed_val != my_val {
+        panic!("mismatched {}", name);
+    }
 }
 
 fn check_attribute_128(true_val: &str, my_val: u128, name: &str) {
-	let parsed_val = u128::from_str_radix(true_val, 10).unwrap();
-	println!("true {}, my {} = {}, {}", name, name, parsed_val, my_val);
-	if parsed_val != my_val {
-		panic!("mismatched {}", name);
-	}
+    let parsed_val = u128::from_str_radix(true_val, 10).unwrap();
+    println!("true {}, my {} = {}, {}", name, name, parsed_val, my_val);
+    if parsed_val != my_val {
+        panic!("mismatched {}", name);
+    }
 }

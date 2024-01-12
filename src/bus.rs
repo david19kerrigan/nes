@@ -5,6 +5,8 @@ use std::fs::read;
 const cpu_memory_size: usize = 65535;
 const ppu_memory_size: usize = 16384;
 
+const CONTROL: u16 = 0x2000;
+const MASK: u16 = 0x2001;
 const OAM_ADDR: u16 = 0x2003;
 const OAM_DATA: u16 = 0x2004;
 const SCROLL: u16 = 0x2005;
@@ -84,9 +86,14 @@ impl Bus {
 			ppu.write_data(val, self);
         } else if mut_addr == ADDR {
 			ppu.write_addr(val);
-        } else if mut_addr == OAM_DATA {
+        } else if mut_addr == OAM_DATA { // Only using OAM DMA for now
         } else if mut_addr == OAM_ADDR {
         } else if mut_addr == OAM_DMA {
+			ppu.write_oam(val, self);
+        } else if mut_addr == CONTROL {
+			ppu.control.read(self);
+        } else if mut_addr == MASK {
+			ppu.mask.read(self);
         }
 
 		self.cpu_write_16(mut_addr, val);

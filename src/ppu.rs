@@ -1,13 +1,6 @@
 use crate::util::*;
 use crate::Bus;
 
-const OAM_ADDR: u16 = 0x2003;
-const OAM_DATA: u16 = 0x2004;
-const SCROLL: u16 = 0x2005;
-const ADDR: u16 = 0x2006;
-const DATA: u16 = 0x2007;
-const OAM_DMA: u16 = 0x4014;
-
 pub struct Status {
     vblank: bool,
     hit: bool,
@@ -111,8 +104,10 @@ pub struct Ppu {
     oam: [u8; 256],
     cycle: u16,
     line: u16,
-    status: Status,
-    control: Control,
+    nametable_addr: u16,
+    pub status: Status,
+    pub control: Control,
+    pub mask: Mask,
     pub addr: u16,
     pub oam_addr: u16,
     v: u8,
@@ -127,8 +122,10 @@ impl Ppu {
             oam: [0; 256],
             cycle: 0,
             line: 0,
+            nametable_addr: 0,
             status: Status::new(),
             control: Control::new(),
+            mask: Mask::new(),
             addr: 0,
             oam_addr: 0,
             v: 0,
@@ -139,27 +136,48 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
-		bus.ppu_write_16(self.addr, data);
-		self.addr += self.control.vram_increment as u16;
-	}
+        bus.ppu_write_16(self.addr, data);
+        self.addr += self.control.vram_increment as u16;
+    }
 
     pub fn write_addr(&mut self, addr: u8) {
         if !self.w {
             self.addr |= (addr as u16) << 8;
         } else {
-			self.addr |= addr as u16;
+            self.addr |= addr as u16;
         }
-		self.w = !self.w
+        self.w = !self.w
+    }
+
+    pub fn write_oam(&mut self, addr: u8, bus: &mut Bus) {
+        let mut new_addr = (addr as u16) << 8;
+        for n in 0..0xFF {
+            self.oam[n] = bus.cpu_read_16(new_addr);
+            new_addr += 1;
+        }
     }
 
     pub fn tick(&mut self, bus: &mut Bus) {
-        self.cycle += 1;
         if self.cycle > 340 {
             self.cycle = 0;
             self.line += 1;
         }
         if self.line > 261 {
             self.line = 0;
+        }
+
+        if self.line < 240 {
+            if self.cycle >= 1 && self.cycle <= 256 {
+                let order = (self.cycle - 1) % 8;
+                match order {
+                    0 => (),
+                    2 => (),
+                    4 => (),
+                    6 => (),
+                    _ => panic!(),
+                }
+            }
+        } else if self.line == 261 {
         }
 
         if self.line == 240 && self.cycle == 1 {
@@ -169,5 +187,7 @@ impl Ppu {
             self.status.vblank = false;
             self.status.write(bus);
         }
+
+        self.cycle += 1;
     }
 }
