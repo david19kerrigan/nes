@@ -19,22 +19,39 @@ use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+const LINE_P: usize = 5;
+const LINE_SP: usize = 4;
+const LINE_A: usize = 1;
+const LINE_X: usize = 2;
+const LINE_Y: usize = 3;
+const LINE_ADDR: usize = 6;
+const LINE_CYC: usize = 0;
+
+//const LINE_P: u8 = 9;
+//const LINE_SP: u8 = 10;
+//const LINE_A: u8 = 6;
+//const LINE_X: u8 = 7;
+//const LINE_Y: u8 = 8;
+//const LINE_ADDR: u8 = 0;
+//const LINE_CYC: usize = 13;
+
 fn main() {
     let mut bus = Bus::new();
     let mut cpu = Cpu::new();
     let mut ppu = Ppu::new();
     let mut cycles_left = 0;
-    let mut cycles_total: u128 = 7;
+    let mut cycles_total: u128 = 0;
 
     bus.load_cartridge("/home/david/Documents/nes/src/test/nestest.nes");
     cpu.Reset(&mut bus);
+    cycles_total = 7; // JMP takes 7 cycles
 
     // --------------- Testing ------------------
 
-    //cpu.pc = 0xC000;
-    //let file = File::open("/home/david/Documents/nes/src/test/nestest2.log").unwrap();
-    //let mut rdr = Reader::from_reader(file);
-    //let mut rec = rdr.records();
+    cpu.pc = 0xC000;
+    let file = File::open("/home/david/Documents/nes/src/test/reset2.log").unwrap();
+    let mut rdr = Reader::from_reader(file);
+    let mut rec = rdr.records();
 
     // --------------- SDL ------------------
 
@@ -57,6 +74,10 @@ fn main() {
     let mut input: u8 = 0;
 
     loop {
+        canvas.set_draw_color(Color::RGB(0, 0, 0));
+        canvas.clear();
+        canvas.set_draw_color(Color::RGB(255, 255, 255));
+
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -111,26 +132,29 @@ fn main() {
 
                 // --------------- Testing ------------------
 
-                //let line = rec.next().unwrap().unwrap();
-                //check_attribute_128(&line[13], cycles_total, "cyc");
-                //check_attribute_8(&line[9], p, "p");
-                //check_attribute_8(&line[10], sp, "sp");
-                //check_attribute_8(&line[6], a, "a");
-                //check_attribute_8(&line[7], x, "x");
-                //check_attribute_8(&line[8], y, "y");
-                //check_attribute_16(&line[0], addr, "addr");
+                let line = rec.next().unwrap().unwrap();
+                check_attribute_128(&line[LINE_CYC], cycles_total, "cyc");
+                check_attribute_8(&line[LINE_P], p, "p");
+                check_attribute_8(&line[LINE_SP], sp, "sp");
+                check_attribute_8(&line[LINE_A], a, "a");
+                check_attribute_8(&line[LINE_X], x, "x");
+                check_attribute_8(&line[LINE_Y], y, "y");
+                check_attribute_16(&line[LINE_ADDR], addr, "addr");
 
                 // ------------------------------------------
 
-                cycles_total += cycles_left as u128;
+                println!("cycles {}", cycles_total);
                 println!("------------------------");
+                cycles_total += cycles_left as u128;
             }
             cycles_left -= 1;
 
             for m in 0..2 {
-                ppu.tick(&mut bus);
+                ppu.tick(&mut bus, &mut canvas, &mut cpu);
             }
         }
+
+        canvas.present();
 
         // --------------- Timing ------------------
 

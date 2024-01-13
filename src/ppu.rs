@@ -1,5 +1,11 @@
 use crate::util::*;
 use crate::Bus;
+use crate::Cpu;
+
+use sdl2::pixels::Color;
+use sdl2::rect::Point;
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 
 pub struct Status {
     vblank: bool,
@@ -9,7 +15,7 @@ pub struct Status {
 }
 
 pub struct Control {
-    nametable_address: u8,
+    nametable_address: u16,
     vram_increment: u8,
     sprite_address: u8,
     background_address: u8,
@@ -27,6 +33,16 @@ pub struct Mask {
     red: bool,
     green: bool,
     blue: bool,
+}
+
+pub fn parse_nametable(nametable_bits: u8) -> u16 {
+    match nametable_bits {
+        0 => 0x2000,
+        1 => 0x2400,
+        2 => 0x2800,
+        3 => 0x2C00,
+        _ => panic!(),
+    }
 }
 
 impl Mask {
@@ -59,7 +75,7 @@ impl Mask {
 impl Control {
     pub fn new() -> Control {
         Control {
-            nametable_address: 0,
+            nametable_address: parse_nametable(0),
             vram_increment: 0,
             sprite_address: 0,
             background_address: 0,
@@ -77,7 +93,7 @@ impl Control {
         self.background_address = get_u8_bit(byte, 4);
         self.sprite_address = get_u8_bit(byte, 3);
         self.vram_increment = get_u8_bit(byte, 2);
-        self.nametable_address = get_u8_bits(byte, 1, 0);
+        self.nametable_address = parse_nametable(get_u8_bits(byte, 1, 0));
     }
 }
 
@@ -157,7 +173,7 @@ impl Ppu {
         }
     }
 
-    pub fn tick(&mut self, bus: &mut Bus) {
+    pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) {
         if self.cycle > 340 {
             self.cycle = 0;
             self.line += 1;
@@ -167,14 +183,33 @@ impl Ppu {
         }
 
         if self.line < 240 {
-            if self.cycle >= 1 && self.cycle <= 256 {
-                let order = (self.cycle - 1) % 8;
-                match order {
-                    0 => (),
-                    2 => (),
-                    4 => (),
-                    6 => (),
-                    _ => panic!(),
+            if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
+                let nametable_x = (256 - self.cycle) / 8;
+                let nametable_y = (240 - self.line) / 8;
+                let nametable_offset = nametable_y * 8 + nametable_x;
+                let nametable_byte = self.control.nametable_address + nametable_offset;
+
+                let tile_row = (240 - self.line) % 8;
+                let mut pattern_address_0 = tile_row;
+                pattern_address_0 |= (nametable_byte as u16) << 4;
+                pattern_address_0 |= (self.control.background_address as u16) << 14;
+                let pattern_address_1 = pattern_address_0 | 1 << 3;
+
+                let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
+                let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
+
+                for n in (0..8).rev() {
+                    let bit_0 = pattern_byte_0 >> n & 0x01;
+                    let bit_1 = pattern_byte_1 >> n & 0x01;
+                    let sum = bit_1 << 1 | bit_0;
+                    // Render pixels in monochrome for now
+                    if sum > 0 {
+                        let point =
+                            Point::new(256 - (self.cycle + n) as i32, 240 - self.line as i32);
+                        if self.mask.background {
+                            canvas.draw_point(point);
+                        }
+                    }
                 }
             }
         } else if self.line == 261 {
@@ -183,6 +218,9 @@ impl Ppu {
         if self.line == 240 && self.cycle == 1 {
             self.status.vblank = true;
             self.status.write(bus);
+            if self.control.nmi {
+                cpu.NMI(bus);
+            }
         } else if self.line == 0 {
             self.status.vblank = false;
             self.status.write(bus);

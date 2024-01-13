@@ -75,15 +75,25 @@ impl Bus {
         self.cpu_memory[u_addr] = val;
 	}
 
-    pub fn cpu_write_16_ppu_regs(&mut self, addr: u16, val: u8, ppu: &mut Ppu) {
+    pub fn cpu_ppu_reg_addr_map(&mut self, addr: u16) -> u16 {
         let mut mut_addr = addr;
         if mut_addr < 0x4000 && mut_addr >= 0x2000 {
             if mut_addr > 0x2007 {
-                mut_addr = (mut_addr - 0x2000) % 8;
+                mut_addr = 0x2000 + ((mut_addr - 0x2000) % 8);
             }
         }
+        mut_addr
+    }
+
+    pub fn cpu_write_16_ppu_regs(&mut self, addr: u16, val: u8, ppu: &mut Ppu) {
+        let mut_addr = self.cpu_ppu_reg_addr_map(addr);
+		self.cpu_write_16(mut_addr, val);
+
         if mut_addr == DATA {
 			ppu.write_data(val, self);
+            if val != 0 {
+                ()
+            }
         } else if mut_addr == ADDR {
 			ppu.write_addr(val);
         } else if mut_addr == OAM_DATA { // Only using OAM DMA for now
@@ -95,8 +105,6 @@ impl Bus {
         } else if mut_addr == MASK {
 			ppu.mask.read(self);
         }
-
-		self.cpu_write_16(mut_addr, val);
     }
 
     // Read address in memory from a low and a high byte in low endian
@@ -110,10 +118,17 @@ impl Bus {
     }
 
     // Read absolute address
+    pub fn ppu_read_16(&mut self, addr: u16) -> u8 {
+        let u_addr = addr as usize;
+        self.ppu_check_addr_in_range(u_addr);
+        self.ppu_memory[u_addr]
+    }
+
     pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
-        self.cpu_memory[u_addr]
+        let mut_addr = self.cpu_ppu_reg_addr_map(addr) as usize;
+        self.cpu_memory[mut_addr]
     }
 
     // Read one byte in relation to the PC
@@ -148,7 +163,6 @@ impl Bus {
     pub fn cross_abs(&mut self, pc: u16, offset: u8) -> u8 {
         let low = self.cpu_read_16(pc + 1);
         let high = self.cpu_read_16(pc + 2);
-        println!("crossing {:x} {:x}", combine_low_high(low, high), offset);
         low.overflowing_add(offset).1 as u8
     }
 

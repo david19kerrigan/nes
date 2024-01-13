@@ -2,6 +2,8 @@ use crate::util::*;
 use crate::Bus;
 use crate::Ppu;
 
+use std::time::{Duration, Instant};
+
 use csv::StringRecord;
 
 const ERR_OP: &str = "Invalid Opcode";
@@ -72,10 +74,19 @@ impl Cpu {
     // --------------- INSTRUCTIONS --------------------
 
     pub fn Reset(&mut self, bus: &mut Bus) {
-        self.pc = combine_low_high(
-            bus.cpu_read_16(0xFFFC),
-            bus.cpu_read_16(0xFFFD),
-        );
+        self.JMP(bus, 0xFFFC);
+    }
+
+    pub fn NMI(&mut self, bus: &mut Bus) {
+        self.JMP(bus, 0xFFFA);
+    }
+
+    pub fn BRK(&mut self, bus: &mut Bus) {
+        self.JMP(bus, 0xFFFE);
+    }
+
+    pub fn JMP(&mut self, bus: &mut Bus, addr: u16) {
+        self.pc = combine_low_high(bus.cpu_read_16(addr), bus.cpu_read_16(addr + 1));
     }
 
     pub fn PHP(&mut self, bus: &mut Bus) {
@@ -302,8 +313,8 @@ impl Cpu {
             Instructions::BRK => {
                 self.stack_push_pc(bus);
                 self.PHP(bus);
-                self.pc = 0xFFFE;
                 self.flag_break(true);
+                self.BRK(bus);
             }
             Instructions::CLC => self.flag_carry(false), Instructions::CLD => self.flag_decimal(false), Instructions::CLI => self.flag_interrupt(false), Instructions::CLV => self.flag_overflow(false),
             Instructions::SEC => self.flag_carry(true), Instructions::SED => self.flag_decimal(true), Instructions::SEI => self.flag_interrupt(true),
@@ -380,7 +391,7 @@ impl Cpu {
     pub fn load_instruction(&mut self, bus: &mut Bus) -> (u8, u8, u8, u8, u8, u8, u16) {
         let cycles: u8;
 		let opcode = bus.cpu_read_16(self.pc);
-        println!("opcode: {:02x}", opcode);
+        //println!("opcode: {:02x}", opcode);
 
         match opcode {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},
@@ -566,7 +577,7 @@ impl Cpu {
 
             0xBA => {self.instr = Instructions::TSX; self.addr = Addressing::IMP; cycles = 2},
             0x9A => {self.instr = Instructions::TXS; self.addr = Addressing::IMP; cycles = 2},
-            _ => panic!("{}", ERR_OP),
+            _ => {std::thread::sleep(Duration::from_secs(1)); panic!("{}", ERR_OP)},
         }
 
         println!("instruction: {:?}", self.instr);
