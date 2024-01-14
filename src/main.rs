@@ -49,7 +49,7 @@ fn main() {
     // --------------- Testing ------------------
 
     cpu.pc = 0xC000;
-    let file = File::open("/home/david/Documents/nes/src/test/reset2.log").unwrap();
+    let file = File::open("/home/david/Documents/nes/src/test/reset5.log").unwrap();
     let mut rdr = Reader::from_reader(file);
     let mut rec = rdr.records();
 
@@ -133,8 +133,9 @@ fn main() {
                 // --------------- Testing ------------------
 
                 let line = rec.next().unwrap().unwrap();
+                let true_p = parse_processor_flags(&line[LINE_P]);
                 check_attribute_128(&line[LINE_CYC], cycles_total, "cyc");
-                check_attribute_8(&line[LINE_P], p, "p");
+                check_attribute_8_str(true_p, p, "p");
                 check_attribute_8(&line[LINE_SP], sp, "sp");
                 check_attribute_8(&line[LINE_A], a, "a");
                 check_attribute_8(&line[LINE_X], x, "x");
@@ -168,10 +169,34 @@ fn main() {
     }
 }
 
+fn parse_processor_flags(flags: &str) -> u8 {
+    println!("test {}", flags);
+    let n = flags.chars().nth(0).unwrap().to_digit(10).unwrap() as u8;
+    let v = flags.chars().nth(1).unwrap().to_digit(10).unwrap() as u8;
+    let u = flags.chars().nth(2).unwrap().to_digit(10).unwrap() as u8;
+    let b = flags.chars().nth(3).unwrap().to_digit(10).unwrap() as u8;
+    let d = flags.chars().nth(4).unwrap().to_digit(10).unwrap() as u8;
+    let i = flags.chars().nth(5).unwrap().to_digit(10).unwrap() as u8;
+    let z = flags.chars().nth(6).unwrap().to_digit(10).unwrap() as u8;
+    let c = flags.chars().nth(7).unwrap().to_digit(10).unwrap() as u8;
+    n << 7 | v << 6 | u << 5 | b << 4 | d << 3 | i << 2 | z <<1 | c
+}
+
 fn check_attribute_16(true_val: &str, my_val: u16, name: &str) {
     let parsed_val = u16::from_str_radix(true_val, 16).unwrap();
     println!(
         "true {}, my {} = {:04x}, {:04x}",
+        name, name, parsed_val, my_val
+    );
+    if parsed_val != my_val {
+        panic!("mismatched {}", name);
+    }
+}
+
+fn check_attribute_8_str(true_val: u8, my_val: u8, name: &str) {
+    let parsed_val = true_val;
+    println!(
+        "true {}, my {} = {:02x}, {:02x}",
         name, name, parsed_val, my_val
     );
     if parsed_val != my_val {
