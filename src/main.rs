@@ -19,12 +19,12 @@ use std::fs::File;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-const LINE_P: usize = 5;
+const LINE_P: usize = 6;
 const LINE_SP: usize = 4;
 const LINE_A: usize = 1;
 const LINE_X: usize = 2;
 const LINE_Y: usize = 3;
-const LINE_ADDR: usize = 6;
+const LINE_ADDR: usize = 7;
 const LINE_CYC: usize = 0;
 
 //const LINE_P: u8 = 9;
@@ -170,15 +170,15 @@ fn main() {
 }
 
 fn parse_processor_flags(flags: &str) -> u8 {
-    println!("test {}", flags);
-    let n = flags.chars().nth(0).unwrap().to_digit(10).unwrap() as u8;
-    let v = flags.chars().nth(1).unwrap().to_digit(10).unwrap() as u8;
-    let u = flags.chars().nth(2).unwrap().to_digit(10).unwrap() as u8;
-    let b = flags.chars().nth(3).unwrap().to_digit(10).unwrap() as u8;
-    let d = flags.chars().nth(4).unwrap().to_digit(10).unwrap() as u8;
-    let i = flags.chars().nth(5).unwrap().to_digit(10).unwrap() as u8;
-    let z = flags.chars().nth(6).unwrap().to_digit(10).unwrap() as u8;
-    let c = flags.chars().nth(7).unwrap().to_digit(10).unwrap() as u8;
+    println!("flags {}", flags);
+    let n = flags.chars().nth(0).unwrap().is_uppercase() as u8;
+    let v = flags.chars().nth(1).unwrap().is_uppercase() as u8;
+    let u = flags.chars().nth(2).unwrap().is_uppercase() as u8;
+    let b = flags.chars().nth(3).unwrap().is_uppercase() as u8;
+    let d = flags.chars().nth(4).unwrap().is_uppercase() as u8;
+    let i = flags.chars().nth(5).unwrap().is_uppercase() as u8;
+    let z = flags.chars().nth(6).unwrap().is_uppercase() as u8;
+    let c = flags.chars().nth(7).unwrap().is_uppercase() as u8;
     n << 7 | v << 6 | u << 5 | b << 4 | d << 3 | i << 2 | z <<1 | c
 }
 
