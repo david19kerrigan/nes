@@ -67,7 +67,7 @@ impl Cpu {
             instr: Instructions::NOP,
             addr: Addressing::IMM,
             stack: [0; 256],
-            stack_pointer: 0xFA,
+            stack_pointer: 0xFD,
         }
     }
 
@@ -272,7 +272,6 @@ impl Cpu {
             },
             _ => panic!("{}", ERR_ADDR),
         };
-
 
         let target_val = bus.cpu_read_16(target_addr);
 

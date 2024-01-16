@@ -100,7 +100,7 @@ impl Control {
 impl Status {
     pub fn new() -> Status {
         Status {
-            vblank: true,
+            vblank: false,
             hit: false,
             overflow: false,
             bus: 0,
@@ -118,8 +118,8 @@ impl Status {
 
 pub struct Ppu {
     oam: [u8; 256],
-    cycle: u16,
-    line: u16,
+    pub cycle: u16,
+    pub line: u16,
     nametable_addr: u16,
     pub status: Status,
     pub control: Control,

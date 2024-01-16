@@ -42,10 +42,11 @@ fn main() {
 	ppu.status.write(&mut bus);
     let mut cycles_left = 0;
     let mut cycles_total: u128 = 0;
+	let mut cycles_abs = 0;
 
     bus.load_cartridge("/home/david/Documents/nes/src/test/nestest.nes");
     cpu.Reset(&mut bus);
-    cycles_total = 7; // JMP takes 7 cycles
+    cycles_total = 0; // JMP takes 7 cycles
 
     // --------------- Testing ------------------
 
@@ -120,11 +121,11 @@ fn main() {
             }
         }
 
-        bus.cpu_write_16(0x4016, input);
+        bus.cpu_write_16(OAM_DMA, input);
 
         // --------------- Instructions ------------------
 
-        for n in 0..29780 {
+        while cycles_total < 29780 {
             if cycles_left == 1 {
                 cpu.execute_instruction(&mut bus, &mut ppu);
             } else if cycles_left == 0 {
@@ -149,16 +150,19 @@ fn main() {
                 println!("cycles {}", cycles_total);
                 println!("------------------------");
                 cycles_total += cycles_left as u128;
+				cycles_abs += cycles_left as u128;
             }
 
             for m in 0..cycles_left * 3 {
                 ppu.tick(&mut bus, &mut canvas, &mut cpu);
             }
+			println!("line cycle {} {}", ppu.line, ppu.cycle);
 
             cycles_left -= 1;
 
         }
 
+		cycles_total = 0;
         canvas.present();
 
         // --------------- Timing ------------------
