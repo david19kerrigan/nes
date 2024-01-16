@@ -119,7 +119,6 @@ impl Bus {
 
         if mut_addr == (STATUS as usize) {
             self.cpu_memory[STATUS as usize] = set_u8_bit(self.cpu_memory[STATUS as usize], 7, 0);
-            println!("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE {:0x}", addr);
         }
 
         temp
