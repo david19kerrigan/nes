@@ -144,7 +144,6 @@ fn main() {
                 check_attribute_8(&line[LINE_Y], y, "y");
                 check_attribute_16(&line[LINE_ADDR], addr, "addr");
 
-
                 // ------------------------------------------
 
                 println!("cycles {}", cycles_total);
