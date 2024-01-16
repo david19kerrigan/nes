@@ -60,7 +60,7 @@ impl Mask {
     }
 
     pub fn read(&mut self, bus: &mut Bus) {
-        let byte = bus.cpu_read_16(0x2000);
+        let byte = bus.cpu_read_16(CONTROL);
         self.greyscale = get_u8_bit(byte, 0) == 1;
         self.background_left_8 = get_u8_bit(byte, 1) == 1;
         self.sprite_left_8 = get_u8_bit(byte, 2) == 1;
@@ -86,7 +86,7 @@ impl Control {
     }
 
     pub fn read(&mut self, bus: &mut Bus) {
-        let byte = bus.cpu_read_16(0x2000);
+        let byte = bus.cpu_read_16(CONTROL);
         self.nmi = get_u8_bit(byte, 7) == 1;
         self.master_slave = get_u8_bit(byte, 6) == 1;
         self.sprite_size = get_u8_bit(byte, 5);
@@ -100,7 +100,7 @@ impl Control {
 impl Status {
     pub fn new() -> Status {
         Status {
-            vblank: false,
+            vblank: true,
             hit: false,
             overflow: false,
             bus: 0,
@@ -112,7 +112,7 @@ impl Status {
             | (self.hit as u8) << 6
             | (self.overflow as u8) << 5
             | self.bus;
-        bus.cpu_write_16(0x2002, byte);
+        bus.cpu_write_16(STATUS, byte);
     }
 }
 
@@ -182,6 +182,7 @@ impl Ppu {
             self.line = 0;
         }
 
+		//println!("line cycle {} {}", self.line, self.cycle);
         if self.line < 240 {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
                 let nametable_x = (256 - self.cycle) / 8;
@@ -221,7 +222,7 @@ impl Ppu {
             if self.control.nmi {
                 cpu.NMI(bus);
             }
-        } else if self.line == 0 {
+        } else if self.line == 261 && self.cycle == 1 {
             self.status.vblank = false;
             self.status.write(bus);
         }

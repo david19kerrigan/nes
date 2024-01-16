@@ -1,3 +1,13 @@
+pub const CONTROL: u16 = 0x2000;
+pub const MASK: u16 = 0x2001;
+pub const STATUS: u16 = 0x2002;
+pub const OAM_ADDR: u16 = 0x2003;
+pub const OAM_DATA: u16 = 0x2004;
+pub const SCROLL: u16 = 0x2005;
+pub const ADDR: u16 = 0x2006;
+pub const DATA: u16 = 0x2007;
+pub const OAM_DMA: u16 = 0x4014;
+
 // Little endian conversion
 pub fn combine_low_high(low: u8, high: u8) -> u16 {
     low as u16 | (high as u16) << 8

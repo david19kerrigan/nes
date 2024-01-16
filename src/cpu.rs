@@ -67,7 +67,7 @@ impl Cpu {
             instr: Instructions::NOP,
             addr: Addressing::IMM,
             stack: [0; 256],
-            stack_pointer: 0xFD,
+            stack_pointer: 0xFA,
         }
     }
 

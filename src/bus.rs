@@ -5,14 +5,6 @@ use std::fs::read;
 const cpu_memory_size: usize = 65535;
 const ppu_memory_size: usize = 16384;
 
-const CONTROL: u16 = 0x2000;
-const MASK: u16 = 0x2001;
-const OAM_ADDR: u16 = 0x2003;
-const OAM_DATA: u16 = 0x2004;
-const SCROLL: u16 = 0x2005;
-const ADDR: u16 = 0x2006;
-const DATA: u16 = 0x2007;
-const OAM_DMA: u16 = 0x4014;
 
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
@@ -67,43 +59,38 @@ impl Bus {
         let u_addr = addr as usize;
         self.ppu_check_addr_in_range(u_addr);
         self.ppu_memory[u_addr] = val;
-	}
+    }
 
     pub fn cpu_write_16(&mut self, addr: u16, val: u8) {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
         self.cpu_memory[u_addr] = val;
-	}
+    }
 
     pub fn cpu_ppu_reg_addr_map(&mut self, addr: u16) -> u16 {
         let mut mut_addr = addr;
-        if mut_addr < 0x4000 && mut_addr >= 0x2000 {
-            if mut_addr > 0x2007 {
-                mut_addr = 0x2000 + ((mut_addr - 0x2000) % 8);
-            }
+        if mut_addr < 0x4000 && mut_addr >= 0x2000 && mut_addr > 0x2007 {
+            mut_addr = 0x2000 + ((mut_addr - 0x2000) % 8);
         }
         mut_addr
     }
 
     pub fn cpu_write_16_ppu_regs(&mut self, addr: u16, val: u8, ppu: &mut Ppu) {
         let mut_addr = self.cpu_ppu_reg_addr_map(addr);
-		self.cpu_write_16(mut_addr, val);
+        self.cpu_write_16(mut_addr, val);
 
         if mut_addr == DATA {
-			ppu.write_data(val, self);
-            if val != 0 {
-                ()
-            }
+            ppu.write_data(val, self);
         } else if mut_addr == ADDR {
-			ppu.write_addr(val);
+            ppu.write_addr(val);
         } else if mut_addr == OAM_DATA { // Only using OAM DMA for now
         } else if mut_addr == OAM_ADDR {
         } else if mut_addr == OAM_DMA {
-			ppu.write_oam(val, self);
+            ppu.write_oam(val, self);
         } else if mut_addr == CONTROL {
-			ppu.control.read(self);
+            ppu.control.read(self);
         } else if mut_addr == MASK {
-			ppu.mask.read(self);
+            ppu.mask.read(self);
         }
     }
 
@@ -128,7 +115,14 @@ impl Bus {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
         let mut_addr = self.cpu_ppu_reg_addr_map(addr) as usize;
-        self.cpu_memory[mut_addr]
+        let temp = self.cpu_memory[mut_addr].clone();
+
+        if mut_addr == (STATUS as usize) {
+            self.cpu_memory[STATUS as usize] = set_u8_bit(self.cpu_memory[STATUS as usize], 7, 0);
+            println!("HEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE {:0x}", addr);
+        }
+
+        temp
     }
 
     // Read one byte in relation to the PC
