@@ -137,7 +137,7 @@ fn main() {
 
                 let line = rec.next().unwrap().unwrap();
                 let true_p = parse_processor_flags(&line[LINE_P]);
-                check_attribute_128(&line[LINE_CYC], cycles_total, "cyc");
+                check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
                 check_attribute_8(&line[LINE_A], a, "a");
                 check_attribute_8_str(true_p, p, "p");
                 check_attribute_8(&line[LINE_SP], sp, "sp");
@@ -147,13 +147,12 @@ fn main() {
 
                 // ------------------------------------------
 
-                println!("cycles {}", cycles_total);
                 println!("------------------------");
                 cycles_total += cycles_left as u128;
 				cycles_abs += cycles_left as u128;
             }
 
-            for m in 0..cycles_left * 3 {
+            for m in 0..3 {
                 ppu.tick(&mut bus, &mut canvas, &mut cpu);
             }
 			println!("line cycle {} {}", ppu.line, ppu.cycle);

@@ -273,7 +273,7 @@ impl Cpu {
             _ => panic!("{}", ERR_ADDR),
         };
 
-        let target_val = bus.cpu_read_16(target_addr);
+        let target_val = bus.cpu_read_16_ppu_regs(target_addr, ppu);
 
 		// --------------- INSTRUCTIONS --------------------
         match self.instr {

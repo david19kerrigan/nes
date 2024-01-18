@@ -137,7 +137,7 @@ impl Ppu {
         Ppu {
             oam: [0; 256],
             cycle: 0,
-            line: 0,
+            line: 261,
             nametable_addr: 0,
             status: Status::new(),
             control: Control::new(),
@@ -174,14 +174,6 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) {
-        if self.cycle > 340 {
-            self.cycle = 0;
-            self.line += 1;
-        }
-        if self.line > 261 {
-            self.line = 0;
-        }
-
 		//println!("line cycle {} {}", self.line, self.cycle);
         if self.line < 240 {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
@@ -228,5 +220,14 @@ impl Ppu {
         }
 
         self.cycle += 1;
+
+        if self.cycle > 340 {
+            self.cycle = 0;
+            self.line += 1;
+        }
+        if self.line > 261 {
+            self.line = 0;
+        }
+
     }
 }

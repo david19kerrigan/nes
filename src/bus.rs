@@ -111,17 +111,27 @@ impl Bus {
         self.ppu_memory[u_addr]
     }
 
-    pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
+    pub fn cpu_read_16_ppu_regs(&mut self, addr: u16, ppu: &mut Ppu) -> u8 {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
         let mut_addr = self.cpu_ppu_reg_addr_map(addr) as usize;
-        let temp = self.cpu_memory[mut_addr].clone();
+        let mut temp = self.cpu_memory[mut_addr].clone();
 
         if mut_addr == (STATUS as usize) {
             self.cpu_memory[STATUS as usize] = set_u8_bit(self.cpu_memory[STATUS as usize], 7, 0);
+            if ppu.line == 240 && ppu.cycle >= 2 && ppu.cycle < 5 {
+                temp = self.cpu_memory[mut_addr];
+            }
         }
 
         temp
+    }
+
+
+    pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
+        let u_addr = addr as usize;
+        self.cpu_check_addr_in_range(u_addr);
+        self.cpu_memory[u_addr]
     }
 
     // Read one byte in relation to the PC
