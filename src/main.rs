@@ -39,10 +39,10 @@ fn main() {
     let mut bus = Bus::new();
     let mut cpu = Cpu::new();
     let mut ppu = Ppu::new();
-	ppu.status.write(&mut bus);
+    ppu.status.write(&mut bus);
     let mut cycles_left = 0;
     let mut cycles_total: u128 = 0;
-	let mut cycles_abs = 0;
+    let mut cycles_abs = 0;
 
     bus.load_cartridge("/home/david/Documents/nes/src/test/nestest.nes");
     cpu.Reset(&mut bus);
@@ -54,6 +54,9 @@ fn main() {
     let file = File::open("/home/david/Documents/nes/src/test/reset6.log").unwrap();
     let mut rdr = Reader::from_reader(file);
     let mut rec = rdr.records();
+    let mut vblank_count = 0;
+    let passed_30k = 89460;
+    let mut has_passed = false;
 
     // --------------- SDL ------------------
 
@@ -133,35 +136,48 @@ fn main() {
                 cycles_left = temp;
 
                 // --------------- Testing ------------------
-				println!("ppu status {:0b}", bus.cpu_memory[STATUS as usize]);
 
-                let line = rec.next().unwrap().unwrap();
-                let true_p = parse_processor_flags(&line[LINE_P]);
-                check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
-                check_attribute_8(&line[LINE_A], a, "a");
-                check_attribute_8_str(true_p, p, "p");
-                check_attribute_8(&line[LINE_SP], sp, "sp");
-                check_attribute_8(&line[LINE_X], x, "x");
-                check_attribute_8(&line[LINE_Y], y, "y");
-                check_attribute_16(&line[LINE_ADDR], addr, "addr");
+                let ppu_status = bus.cpu_memory[STATUS as usize];
+                println!("ppu status {:0b}", ppu_status);
+                if ppu_status == 0x80 {
+                    vblank_count += 1;
+                }
+                if vblank_count == 1 && !has_passed {
+                    has_passed = true;
+                    cycles_abs = passed_30k;
+                    let mut line = rec.next().unwrap().unwrap();
+                    while u128::from_str_radix(&line[LINE_CYC], 10).unwrap() < passed_30k - 3 {
+                        line = rec.next().unwrap().unwrap();
+                    }
+                }
+                if has_passed {
+                    let line = rec.next().unwrap().unwrap();
+                    let true_p = parse_processor_flags(&line[LINE_P]);
+                    check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
+                    check_attribute_16(&line[LINE_ADDR], addr, "addr");
+                    check_attribute_8(&line[LINE_A], a, "a");
+                    check_attribute_8_str(true_p, p, "p");
+                    check_attribute_8(&line[LINE_SP], sp, "sp");
+                    check_attribute_8(&line[LINE_X], x, "x");
+                    check_attribute_8(&line[LINE_Y], y, "y");
+                }
 
                 // ------------------------------------------
 
                 println!("------------------------");
                 cycles_total += cycles_left as u128;
-				cycles_abs += cycles_left as u128;
+                cycles_abs += cycles_left as u128;
             }
 
             for m in 0..3 {
                 ppu.tick(&mut bus, &mut canvas, &mut cpu);
             }
-			println!("line cycle {} {}", ppu.line, ppu.cycle);
+            //println!("line cycle {} {}", ppu.line, ppu.cycle);
 
             cycles_left -= 1;
-
         }
 
-		cycles_total = 0;
+        cycles_total = 0;
         canvas.present();
 
         // --------------- Timing ------------------

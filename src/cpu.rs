@@ -44,7 +44,7 @@ pub struct Cpu {
     instr: Instructions,
     addr: Addressing,
     stack: [u8; 256],
-    stack_pointer: u8,
+    pub stack_pointer: u8,
 }
 
 impl Cpu {
@@ -301,8 +301,11 @@ impl Cpu {
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
                 if can_branch {
-					let low = (self.pc as u8).wrapping_add_signed(target_val as i8) as u8;
-					self.pc = combine_low_high(low, (self.pc >> 8) as u8);
+					//let low = (self.pc as u8).wrapping_add_signed(target_val as i8) as u8;
+					//self.pc = combine_low_high(low, (self.pc >> 8) as u8);
+
+                    println!("offset {}", target_val as i16);
+					self.pc = self.pc.wrapping_add_signed(target_val as i8 as i16);
                 }
             }
             Instructions::BIT => {
@@ -390,7 +393,6 @@ impl Cpu {
     pub fn load_instruction(&mut self, bus: &mut Bus) -> (u8, u8, u8, u8, u8, u8, u16) {
         let cycles: u8;
 		let opcode = bus.cpu_read_16(self.pc);
-        //println!("opcode: {:02x}", opcode);
 
         match opcode {
             0x69 => {self.instr = Instructions::ADC; self.addr = Addressing::IMM; cycles = 2},

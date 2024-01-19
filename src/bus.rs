@@ -5,7 +5,6 @@ use std::fs::read;
 const cpu_memory_size: usize = 65535;
 const ppu_memory_size: usize = 16384;
 
-
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
     pub ppu_memory: [u8; ppu_memory_size + 1],
@@ -127,7 +126,6 @@ impl Bus {
         temp
     }
 
-
     pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
@@ -146,8 +144,9 @@ impl Bus {
 
     // Does addressing mode Rel cross the page?
     pub fn cross_rel(&mut self, pc: u16) -> u8 {
-        let low = self.cpu_read_16(pc + 1) as i16;
-        (pc + 2).overflowing_add_signed(low).1 as u8
+        let low = self.cpu_read_16(pc + 1) as i8 as i16;
+        let new = (pc + 2).overflowing_add_signed(low).0;
+        (pc + 2 >> 8 & 0x0F != new >> 8 & 0x0F) as u8
     }
 
     // Does addressing mode Indexed Y cross the page?
@@ -159,7 +158,9 @@ impl Bus {
             return 1;
         }
         let high = self.cpu_read_8(high_addr);
-        combine_low_high(low, high).overflowing_add(offset as u16).1 as u8
+        let a = combine_low_high(low, high);
+        println!("a b {:0x} {:0x}", a, offset);
+        (combine_low_high(low, high) as u8).overflowing_add(offset as u8).1 as u8
     }
 
     // Does addressing mode Indexed X cross the page?

@@ -51,7 +51,7 @@ impl Mask {
             greyscale: false,
             background_left_8: false,
             sprite_left_8: false,
-            background: false,
+            background: true,
             sprite: false,
             red: false,
             green: false,
@@ -137,7 +137,7 @@ impl Ppu {
         Ppu {
             oam: [0; 256],
             cycle: 0,
-            line: 261,
+            line: 0,
             nametable_addr: 0,
             status: Status::new(),
             control: Control::new(),
