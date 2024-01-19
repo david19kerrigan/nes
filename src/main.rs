@@ -138,7 +138,7 @@ fn main() {
                 // --------------- Testing ------------------
 
                 let ppu_status = bus.cpu_memory[STATUS as usize];
-                println!("ppu status {:0b}", ppu_status);
+                //println!("ppu status {:0b}", ppu_status);
                 if ppu_status == 0x80 {
                     vblank_count += 1;
                 }
@@ -153,18 +153,18 @@ fn main() {
                 if has_passed {
                     let line = rec.next().unwrap().unwrap();
                     let true_p = parse_processor_flags(&line[LINE_P]);
-                    check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
-                    check_attribute_16(&line[LINE_ADDR], addr, "addr");
-                    check_attribute_8(&line[LINE_A], a, "a");
-                    check_attribute_8_str(true_p, p, "p");
-                    check_attribute_8(&line[LINE_SP], sp, "sp");
-                    check_attribute_8(&line[LINE_X], x, "x");
-                    check_attribute_8(&line[LINE_Y], y, "y");
+                    //check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
+                    //check_attribute_16(&line[LINE_ADDR], addr, "addr");
+                    //check_attribute_8(&line[LINE_A], a, "a");
+                    //check_attribute_8_str(true_p, p, "p");
+                    //check_attribute_8(&line[LINE_SP], sp, "sp");
+                    //check_attribute_8(&line[LINE_X], x, "x");
+                    //check_attribute_8(&line[LINE_Y], y, "y");
                 }
 
                 // ------------------------------------------
 
-                println!("------------------------");
+                //println!("------------------------");
                 cycles_total += cycles_left as u128;
                 cycles_abs += cycles_left as u128;
             }

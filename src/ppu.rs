@@ -51,7 +51,7 @@ impl Mask {
             greyscale: false,
             background_left_8: false,
             sprite_left_8: false,
-            background: true,
+            background: false,
             sprite: false,
             red: false,
             green: false,
@@ -76,7 +76,7 @@ impl Control {
     pub fn new() -> Control {
         Control {
             nametable_address: parse_nametable(0),
-            vram_increment: 0,
+            vram_increment: 1,
             sprite_address: 0,
             background_address: 0,
             sprite_size: 0,
@@ -92,7 +92,8 @@ impl Control {
         self.sprite_size = get_u8_bit(byte, 5);
         self.background_address = get_u8_bit(byte, 4);
         self.sprite_address = get_u8_bit(byte, 3);
-        self.vram_increment = get_u8_bit(byte, 2);
+        let vram_increment = get_u8_bit(byte, 2);
+        self.vram_increment = if vram_increment == 0 { 1 } else { 32 };
         self.nametable_address = parse_nametable(get_u8_bits(byte, 1, 0));
     }
 }
@@ -153,6 +154,7 @@ impl Ppu {
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
         bus.ppu_write_16(self.addr, data);
+        println!("ppu write {} {}", self.addr, data);
         self.addr += self.control.vram_increment as u16;
     }
 
@@ -174,7 +176,7 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) {
-		//println!("line cycle {} {}", self.line, self.cycle);
+        //println!("line cycle {} {}", self.line, self.cycle);
         if self.line < 240 {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
                 let nametable_x = (256 - self.cycle) / 8;
@@ -228,6 +230,5 @@ impl Ppu {
         if self.line > 261 {
             self.line = 0;
         }
-
     }
 }

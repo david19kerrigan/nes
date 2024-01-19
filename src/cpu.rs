@@ -301,10 +301,6 @@ impl Cpu {
             Instructions::BCC | Instructions::BCS | Instructions::BEQ | Instructions::BMI | Instructions::BNE | Instructions::BPL | Instructions::BVC | Instructions::BVS => {
                 let can_branch = match self.instr { Instructions::BCC => !self.c, Instructions::BCS => self.c, Instructions::BEQ => self.z, Instructions::BMI => self.n, Instructions::BNE => !self.z, Instructions::BPL => !self.n, Instructions::BVC => !self.o, Instructions::BVS => self.o, _ => panic!() };
                 if can_branch {
-					//let low = (self.pc as u8).wrapping_add_signed(target_val as i8) as u8;
-					//self.pc = combine_low_high(low, (self.pc >> 8) as u8);
-
-                    println!("offset {}", target_val as i16);
 					self.pc = self.pc.wrapping_add_signed(target_val as i8 as i16);
                 }
             }
@@ -385,8 +381,8 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        println!("prev target val: {:02x}", target_val);
-        println!("prev target addr: {:04x}", target_addr);
+        //println!("prev target val: {:02x}", target_val);
+        //println!("prev target addr: {:04x}", target_addr);
     }
 
     #[rustfmt::skip]
@@ -581,9 +577,9 @@ impl Cpu {
             _ => {std::thread::sleep(Duration::from_secs(1)); panic!("{}", ERR_OP)},
         }
 
-        println!("instruction: {:?}", self.instr);
-        println!("addressing mode: {:?}", self.addr);
-		println!("pc {:04x}", self.pc);
+        //println!("instruction: {:?}", self.instr);
+        //println!("addressing mode: {:?}", self.addr);
+		//println!("pc {:04x}", self.pc);
 
         (cycles, self.flags_to_byte(), self.stack_pointer, self.a, self.x, self.y, self.pc)
     }
