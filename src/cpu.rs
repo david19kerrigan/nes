@@ -78,7 +78,14 @@ impl Cpu {
     }
 
     pub fn NMI(&mut self, bus: &mut Bus) {
+        self.stack_push_pc(bus);
+        self.PHP(bus);
         self.JMP(bus, 0xFFFA);
+        self.instr = Instructions::NOP;
+        self.addr = Addressing::IMP;
+        self.pc -= 1;
+        println!("nmi 1 {:0x}", bus.cpu_read_16(0xFFFA));
+        println!("nmi 2 {:0x}", bus.cpu_read_16(0xFFFB));
     }
 
     pub fn BRK(&mut self, bus: &mut Bus) {
@@ -381,8 +388,8 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        //println!("prev target val: {:02x}", target_val);
-        //println!("prev target addr: {:04x}", target_addr);
+        println!("prev target val: {:02x}", target_val);
+        println!("prev target addr: {:04x}", target_addr);
     }
 
     #[rustfmt::skip]
@@ -577,9 +584,9 @@ impl Cpu {
             _ => {std::thread::sleep(Duration::from_secs(1)); panic!("{}", ERR_OP)},
         }
 
-        //println!("instruction: {:?}", self.instr);
-        //println!("addressing mode: {:?}", self.addr);
-		//println!("pc {:04x}", self.pc);
+        println!("instruction: {:?}", self.instr);
+        println!("addressing mode: {:?}", self.addr);
+		println!("pc {:04x}", self.pc);
 
         (cycles, self.flags_to_byte(), self.stack_pointer, self.a, self.x, self.y, self.pc)
     }

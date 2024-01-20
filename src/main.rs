@@ -51,7 +51,7 @@ fn main() {
     // --------------- Testing ------------------
 
     //cpu.pc = 0xC000;
-    let file = File::open("/home/david/Documents/nes/src/test/reset6.log").unwrap();
+    let file = File::open("/home/david/Documents/nes/src/test/next/reset6.log").unwrap();
     let mut rdr = Reader::from_reader(file);
     let mut rec = rdr.records();
     let mut vblank_count = 0;
@@ -153,26 +153,30 @@ fn main() {
                 if has_passed {
                     let line = rec.next().unwrap().unwrap();
                     let true_p = parse_processor_flags(&line[LINE_P]);
-                    //check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
-                    //check_attribute_16(&line[LINE_ADDR], addr, "addr");
-                    //check_attribute_8(&line[LINE_A], a, "a");
-                    //check_attribute_8_str(true_p, p, "p");
-                    //check_attribute_8(&line[LINE_SP], sp, "sp");
-                    //check_attribute_8(&line[LINE_X], x, "x");
-                    //check_attribute_8(&line[LINE_Y], y, "y");
+                    check_attribute_128(&line[LINE_CYC], cycles_abs, "cyc");
+                    check_attribute_16(&line[LINE_ADDR], addr, "addr");
+                    check_attribute_8(&line[LINE_A], a, "a");
+                    check_attribute_8_str(true_p, p, "p");
+                    check_attribute_8(&line[LINE_SP], sp, "sp");
+                    check_attribute_8(&line[LINE_X], x, "x");
+                    check_attribute_8(&line[LINE_Y], y, "y");
+                    println!("x {:0x}", x);
+                    println!("y {:0x}", y);
                 }
 
                 // ------------------------------------------
 
-                //println!("------------------------");
+                println!("------------------------");
                 cycles_total += cycles_left as u128;
                 cycles_abs += cycles_left as u128;
+                println!("line cycle {} {}", ppu.line, ppu.cycle);
             }
 
             for m in 0..3 {
-                ppu.tick(&mut bus, &mut canvas, &mut cpu);
+                let temp = ppu.tick(&mut bus, &mut canvas, &mut cpu);
+                cycles_left += temp;
+                cycles_abs += temp as u128;
             }
-            //println!("line cycle {} {}", ppu.line, ppu.cycle);
 
             cycles_left -= 1;
         }

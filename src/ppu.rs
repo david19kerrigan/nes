@@ -153,8 +153,8 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
-        bus.ppu_write_16(self.addr, data);
-        println!("ppu write {} {}", self.addr, data);
+        bus.ppu_write_16(self.addr % 0x4000, data);
+        println!("ppu write {:0x} {:0x}", self.addr, data);
         self.addr += self.control.vram_increment as u16;
     }
 
@@ -175,7 +175,8 @@ impl Ppu {
         }
     }
 
-    pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) {
+    pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) -> u8 {
+        let mut cycles = 0;
         //println!("line cycle {} {}", self.line, self.cycle);
         if self.line < 240 {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
@@ -204,6 +205,7 @@ impl Ppu {
                         if self.mask.background {
                             canvas.draw_point(point);
                         }
+                        canvas.draw_point(point);
                     }
                 }
             }
@@ -214,7 +216,9 @@ impl Ppu {
             self.status.vblank = true;
             self.status.write(bus);
             if self.control.nmi {
+                println!("NMI Occurred");
                 cpu.NMI(bus);
+                cycles = 7;
             }
         } else if self.line == 261 && self.cycle == 1 {
             self.status.vblank = false;
@@ -230,5 +234,6 @@ impl Ppu {
         if self.line > 261 {
             self.line = 0;
         }
+        cycles
     }
 }
