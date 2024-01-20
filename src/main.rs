@@ -27,6 +27,7 @@ const LINE_Y: usize = 4;
 const LINE_ADDR: usize = 7;
 const LINE_CYC: usize = 1;
 
+// For nestest log from C000
 //const LINE_P: u8 = 9;
 //const LINE_SP: u8 = 10;
 //const LINE_A: u8 = 6;
