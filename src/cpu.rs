@@ -390,6 +390,10 @@ impl Cpu {
 
         //println!("prev target val: {:02x}", target_val);
         //println!("prev target addr: {:04x}", target_addr);
+		if target_addr == 0x4016 {
+			println!("INPUT");
+			println!("instr {:?}", self.instr);
+		}
     }
 
     #[rustfmt::skip]

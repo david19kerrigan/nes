@@ -153,20 +153,17 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
-		if self.addr >= 0x4000 {
-			self.addr = 0x2000;
-		}
         bus.ppu_write_16(self.addr, data);
-        println!("ppu write {:0x} {:0x}", self.addr, data);
-        self.addr = self.addr.wrapping_add(self.control.vram_increment as u16);
+        //println!("ppu write {:0x} {:0x}", self.addr, data);
+        self.addr += self.control.vram_increment as u16;
     }
 
     pub fn write_addr(&mut self, addr: u8) {
         if !self.w {
-			self.addr &= 0x00FF;
+            self.addr &= 0x00FF;
             self.addr |= (addr as u16) << 8;
         } else {
-			self.addr &= 0xFF00;
+            self.addr &= 0xFF00;
             self.addr |= addr as u16;
         }
         self.w = !self.w;
@@ -186,29 +183,35 @@ impl Ppu {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
                 let nametable_x = (256 - self.cycle) / 8;
                 let nametable_y = (240 - self.line) / 8;
-                let nametable_offset = nametable_y * 8 + nametable_x;
-                let nametable_byte = self.control.nametable_address + nametable_offset;
+                let nametable_offset = nametable_y * 32 + nametable_x;
+                let nametable_address = self.control.nametable_address + nametable_offset;
+                let nametable_byte = bus.ppu_read_16(nametable_address) + 1;
 
                 let tile_row = (240 - self.line) % 8;
                 let mut pattern_address_0 = tile_row;
-                pattern_address_0 |= (bus.ppu_read_16(nametable_byte) as u16) << 4;
+                pattern_address_0 |= (nametable_byte as u16) << 4;
                 pattern_address_0 |= (self.control.background_address as u16) << 14;
                 let pattern_address_1 = pattern_address_0 | 1 << 3;
 
                 let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
                 let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
-				println!("nametable x y {} {}", nametable_x, nametable_y);
-				println!("pattern 0 {:04x}", pattern_address_0);
-				println!("---------------------");
+
+                //println!("nametable address {:04x}", nametable_address);
+                //println!("nametable byte {:04x}", nametable_byte);
+                //println!("address 0 {:04x}", pattern_address_0);
+                //println!("address 1 {:04x}", pattern_address_1);
+                //println!("---------------------");
 
                 for n in (0..8).rev() {
-                    let bit_0 = pattern_byte_0 >> n & 0x01;
-                    let bit_1 = pattern_byte_1 >> n & 0x01;
+                    let bit_0 = get_u8_bit(pattern_byte_0, n);
+                    let bit_1 = get_u8_bit(pattern_byte_1, n);
                     let sum = bit_1 << 1 | bit_0;
                     // Render pixels in monochrome for now
                     if sum > 0 {
-                        let point =
-                            Point::new(256 - (self.cycle + n) as i32, 240 - self.line as i32);
+                        let point = Point::new(
+                            256 - (self.cycle + n as u16) as i32,
+                            240 - self.line as i32,
+                        );
                         if self.mask.background {
                             //canvas.draw_point(point);
                         }
