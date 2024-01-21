@@ -191,12 +191,15 @@ impl Ppu {
 
                 let tile_row = (240 - self.line) % 8;
                 let mut pattern_address_0 = tile_row;
-                pattern_address_0 |= (nametable_byte as u16) << 4;
+                pattern_address_0 |= (bus.ppu_read_16(nametable_byte) as u16) << 4;
                 pattern_address_0 |= (self.control.background_address as u16) << 14;
                 let pattern_address_1 = pattern_address_0 | 1 << 3;
 
                 let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
                 let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
+				println!("nametable x y {} {}", nametable_x, nametable_y);
+				println!("pattern 0 {:04x}", pattern_address_0);
+				println!("---------------------");
 
                 for n in (0..8).rev() {
                     let bit_0 = pattern_byte_0 >> n & 0x01;
