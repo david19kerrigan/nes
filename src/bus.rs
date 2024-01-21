@@ -2,8 +2,8 @@ use crate::util::*;
 use crate::Ppu;
 use std::fs::read;
 
-const cpu_memory_size: usize = 65535;
-const ppu_memory_size: usize = 16384;
+const cpu_memory_size: usize = 0x10000;
+const ppu_memory_size: usize = 0x4000;
 
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
@@ -68,8 +68,8 @@ impl Bus {
 
     pub fn cpu_ppu_reg_addr_map(&mut self, addr: u16) -> u16 {
         let mut mut_addr = addr;
-        if mut_addr < 0x4000 && mut_addr >= 0x2000 && mut_addr > 0x2007 {
-            mut_addr = 0x2000 + ((mut_addr - 0x2000) % 8);
+        if mut_addr < 0x4000 && mut_addr > 0x2007 {
+            mut_addr = 0x2000 + ((mut_addr - 0x2007) % 8);
         }
         mut_addr
     }
@@ -119,7 +119,7 @@ impl Bus {
         if mut_addr == (STATUS as usize) {
             self.cpu_memory[STATUS as usize] = set_u8_bit(self.cpu_memory[STATUS as usize], 7, 0);
             if ppu.line == 240 && ppu.cycle >= 2 && ppu.cycle < 5 {
-                temp = self.cpu_memory[mut_addr];
+                //temp = self.cpu_memory[mut_addr];
             }
         }
 
@@ -144,9 +144,9 @@ impl Bus {
 
     // Does addressing mode Rel cross the page?
     pub fn cross_rel(&mut self, pc: u16) -> u8 {
-        let low = self.cpu_read_16(pc + 1) as i8 as i16;
-        let new = (pc + 2).overflowing_add_signed(low).0;
-        (pc + 2 >> 8 & 0x0F != new >> 8 & 0x0F) as u8
+        let offset = self.cpu_read_16(pc + 1) as i8 as i16;
+        let new = (pc + 2).wrapping_add_signed(offset);
+        (get_u16_bit(pc + 2, 8) != get_u16_bit(new, 8)) as u8
     }
 
     // Does addressing mode Indexed Y cross the page?
@@ -158,8 +158,6 @@ impl Bus {
             return 1;
         }
         let high = self.cpu_read_8(high_addr);
-        let a = combine_low_high(low, high);
-        println!("a b {:0x} {:0x}", a, offset);
         (combine_low_high(low, high) as u8).overflowing_add(offset as u8).1 as u8
     }
 

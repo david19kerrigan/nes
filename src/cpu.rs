@@ -12,7 +12,7 @@ const ERR_ADDR: &str = "Invalid Addressing Mode";
 #[rustfmt::skip]
 #[derive(PartialEq)]
 #[derive(Debug)]
-enum Instructions {
+pub enum Instructions {
     ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
     CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY, JMP,
     JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR, RTI,
@@ -22,28 +22,28 @@ enum Instructions {
 #[rustfmt::skip]
 #[derive(PartialEq)]
 #[derive(Debug)]
-enum Addressing {
+pub enum Addressing {
     IMP, ACC, IMM, ZPG, ZPX, ZPY, REL, ABS, ABX, ABY, IND, IDX, IDY,
 }
 
 pub struct Cpu {
     // registers
-    a: u8,
-    x: u8,
-    y: u8,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
     pub pc: u16,
     //flags
-    c: bool,
-    z: bool,
-    i: bool,
-    d: bool,
-    b: bool,
-    o: bool,
-    n: bool,
+    pub c: bool,
+    pub z: bool,
+    pub i: bool,
+    pub d: bool,
+    pub b: bool,
+    pub o: bool,
+    pub n: bool,
     // misc
-    instr: Instructions,
-    addr: Addressing,
-    stack: [u8; 256],
+    pub instr: Instructions,
+    pub addr: Addressing,
+    pub stack: [u8; 256],
     pub stack_pointer: u8,
 }
 
@@ -80,12 +80,10 @@ impl Cpu {
     pub fn NMI(&mut self, bus: &mut Bus) {
         self.stack_push_pc(bus);
         self.PHP(bus);
-        self.JMP(bus, 0xFFFA);
-        self.instr = Instructions::NOP;
-        self.addr = Addressing::IMP;
-        self.pc -= 1;
-        println!("nmi 1 {:0x}", bus.cpu_read_16(0xFFFA));
-        println!("nmi 2 {:0x}", bus.cpu_read_16(0xFFFB));
+		self.pc = 0xFFF9;
+		self.instr = Instructions::JMP;
+		self.addr = Addressing::ABS;
+        //self.JMP(bus, 0xFFFA);
     }
 
     pub fn BRK(&mut self, bus: &mut Bus) {
@@ -244,6 +242,8 @@ impl Cpu {
 
     #[rustfmt::skip]
     pub fn execute_instruction(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
+		if self.i {
+		}
 		// --------------- ADRESSING --------------------
         let target_addr = match self.addr {
             Addressing::IMP | Addressing::ACC => {self.pc += 1; 0},
@@ -388,8 +388,8 @@ impl Cpu {
             _ => panic!("{}", ERR_OP),
         }
 
-        println!("prev target val: {:02x}", target_val);
-        println!("prev target addr: {:04x}", target_addr);
+        //println!("prev target val: {:02x}", target_val);
+        //println!("prev target addr: {:04x}", target_addr);
     }
 
     #[rustfmt::skip]
@@ -583,10 +583,6 @@ impl Cpu {
             0x9A => {self.instr = Instructions::TXS; self.addr = Addressing::IMP; cycles = 2},
             _ => {std::thread::sleep(Duration::from_secs(1)); panic!("{}", ERR_OP)},
         }
-
-        println!("instruction: {:?}", self.instr);
-        println!("addressing mode: {:?}", self.addr);
-		println!("pc {:04x}", self.pc);
 
         (cycles, self.flags_to_byte(), self.stack_pointer, self.a, self.x, self.y, self.pc)
     }

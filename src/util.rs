@@ -7,6 +7,7 @@ pub const SCROLL: u16 = 0x2005;
 pub const ADDR: u16 = 0x2006;
 pub const DATA: u16 = 0x2007;
 pub const OAM_DMA: u16 = 0x4014;
+pub const INPUT: u16 = 0x4016;
 
 // Little endian conversion
 pub fn combine_low_high(low: u8, high: u8) -> u16 {
@@ -33,6 +34,14 @@ pub fn u8_shr(a: u8) -> u8 {
     a >> 1
 }
 
+pub fn get_u8_bit(num: u8, bit: u8) -> u8 {
+    num >> bit & 0x01
+}
+
+pub fn get_u16_bit(num: u16, bit: u8) -> u8 {
+    (num >> bit & 0x0001) as u8
+}
+
 pub fn set_u8_bit(num: u8, bit: u8, val: u8) -> u8 {
     if val == 1 {
         num | (1 << bit)
@@ -41,10 +50,6 @@ pub fn set_u8_bit(num: u8, bit: u8, val: u8) -> u8 {
     } else {
 		panic!("non-binary bit");
 	}
-}
-
-pub fn get_u8_bit(num: u8, bit: u8) -> u8 {
-    num >> bit & 0b00000001
 }
 
 pub fn get_u8_bits(num: u8, l: u8, r: u8) -> u8 {

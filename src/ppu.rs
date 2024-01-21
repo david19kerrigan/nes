@@ -153,18 +153,23 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
-        bus.ppu_write_16(self.addr % 0x4000, data);
+		if self.addr >= 0x4000 {
+			self.addr = 0x2000;
+		}
+        bus.ppu_write_16(self.addr, data);
         println!("ppu write {:0x} {:0x}", self.addr, data);
-        self.addr += self.control.vram_increment as u16;
+        self.addr = self.addr.wrapping_add(self.control.vram_increment as u16);
     }
 
     pub fn write_addr(&mut self, addr: u8) {
         if !self.w {
+			self.addr &= 0x00FF;
             self.addr |= (addr as u16) << 8;
         } else {
+			self.addr &= 0xFF00;
             self.addr |= addr as u16;
         }
-        self.w = !self.w
+        self.w = !self.w;
     }
 
     pub fn write_oam(&mut self, addr: u8, bus: &mut Bus) {
@@ -177,7 +182,6 @@ impl Ppu {
 
     pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) -> u8 {
         let mut cycles = 0;
-        //println!("line cycle {} {}", self.line, self.cycle);
         if self.line < 240 {
             if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
                 let nametable_x = (256 - self.cycle) / 8;
@@ -203,7 +207,7 @@ impl Ppu {
                         let point =
                             Point::new(256 - (self.cycle + n) as i32, 240 - self.line as i32);
                         if self.mask.background {
-                            canvas.draw_point(point);
+                            //canvas.draw_point(point);
                         }
                         canvas.draw_point(point);
                     }
@@ -216,7 +220,6 @@ impl Ppu {
             self.status.vblank = true;
             self.status.write(bus);
             if self.control.nmi {
-                println!("NMI Occurred");
                 cpu.NMI(bus);
                 cycles = 7;
             }
