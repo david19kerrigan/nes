@@ -39,12 +39,13 @@ fn main() {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("game", 256, 240)
+        .window("game", 256 * 2, 240 * 2)
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+	canvas.set_scale(2.0, 2.0);
     canvas.clear();
     canvas.present();
 
@@ -71,35 +72,35 @@ fn main() {
                     keycode: Some(keycode),
                     ..
                 } => match keycode {
-                    Keycode::K => input |= 1 << 7,       // A
-                    Keycode::J => input |= 1 << 6,       // B
-                    Keycode::KpEnter => input |= 1 << 5, // Select
-                    Keycode::V => input |= 1 << 4,       // Start
-                    Keycode::W => input |= 1 << 3,       // Up
-                    Keycode::S => input |= 1 << 2,       // Down
-                    Keycode::A => input |= 1 << 1,       // Left
-                    Keycode::D => input |= 1,            // Right
+                    Keycode::K => input |= 1 << 0,       // A
+                    Keycode::J => input |= 1 << 1,       // B
+                    Keycode::KpEnter => input |= 1 << 2, // Select
+                    Keycode::V => input |= 1 << 3,       // Start
+                    Keycode::W => input |= 1 << 4,       // Up
+                    Keycode::S => input |= 1 << 5,       // Down
+                    Keycode::A => input |= 1 << 6,       // Left
+                    Keycode::D => input |= 1 << 7,            // Right
                     _ => (),
                 },
                 Event::KeyUp {
                     keycode: Some(keycode),
                     ..
                 } => match keycode {
-                    Keycode::K => input &= 0 << 7,       // A
-                    Keycode::J => input &= 0 << 6,       // B
-                    Keycode::KpEnter => input &= 0 << 5, // Select
-                    Keycode::V => input &= 0 << 4,       // Start
-                    Keycode::W => input &= 0 << 3,       // Up
-                    Keycode::S => input &= 0 << 2,       // Down
-                    Keycode::A => input &= 0 << 1,       // Left
-                    Keycode::D => input &= 0,            // Right
+                    Keycode::K => input &= 0 << 0,       // A
+                    Keycode::J => input &= 0 << 1,       // B
+                    Keycode::KpEnter => input &= 0 << 2, // Select
+                    Keycode::V => input &= 0 << 3,       // Start
+                    Keycode::W => input &= 0 << 4,       // Up
+                    Keycode::S => input &= 0 << 5,       // Down
+                    Keycode::A => input &= 0 << 6,       // Left
+                    Keycode::D => input &= 0 << 7,            // Right
                     _ => (),
                 },
                 _ => (),
             }
         }
 
-        bus.cpu_write_16(INPUT, input);
+		bus.input = input;
 
         // --------------- Instructions ------------------
 

@@ -8,6 +8,7 @@ const ppu_memory_size: usize = 0x4000;
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
     pub ppu_memory: [u8; ppu_memory_size + 1],
+	pub input: u8,
 }
 
 impl Bus {
@@ -15,6 +16,7 @@ impl Bus {
         Bus {
             cpu_memory: [0; cpu_memory_size + 1],
             ppu_memory: [0; ppu_memory_size + 1],
+			input: 0,
         }
     }
 
@@ -63,6 +65,10 @@ impl Bus {
     pub fn cpu_write_16(&mut self, addr: u16, val: u8) {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
+		if addr == INPUT {
+			self.cpu_memory[INPUT as usize]  = self.input;
+			return
+		}
         self.cpu_memory[u_addr] = val;
     }
 
@@ -128,7 +134,11 @@ impl Bus {
     pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
-        self.cpu_memory[u_addr]
+		let ret = self.cpu_memory[u_addr].clone();
+		if addr == INPUT {
+			self.cpu_memory[u_addr] >>= 1;
+		}
+		ret
     }
 
     // Read one byte in relation to the PC
