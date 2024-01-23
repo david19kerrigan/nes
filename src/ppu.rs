@@ -154,7 +154,7 @@ impl Ppu {
 
     pub fn write_data(&mut self, data: u8, bus: &mut Bus) {
         bus.ppu_write_16(self.addr, data);
-        //println!("ppu write {:0x} {:0x}", self.addr, data);
+        println!("ppu write {:0x} {:0x}", self.addr, data);
         self.addr += self.control.vram_increment as u16;
     }
 
@@ -190,17 +190,18 @@ impl Ppu {
                 let tile_row = (240 - self.line) % 8;
                 let mut pattern_address_0 = tile_row;
                 pattern_address_0 |= (nametable_byte as u16) << 4;
-                pattern_address_0 |= (self.control.background_address as u16) << 14;
+                pattern_address_0 |= (self.control.background_address as u16) << 13;
                 let pattern_address_1 = pattern_address_0 | 1 << 3;
+
+                //println!("background address {:04x}", self.control.background_address);
+                //println!("address 0 {:0b}", pattern_address_0);
+                //println!("address 1 {:04x}", pattern_address_1);
+                //println!("nametable address {:04x}", nametable_address);
+                //println!("nametable byte {:04x}", nametable_byte);
+                //println!("---------------------");
 
                 let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
                 let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
-
-                //println!("nametable address {:04x}", nametable_address);
-                //println!("nametable byte {:04x}", nametable_byte);
-                //println!("address 0 {:04x}", pattern_address_0);
-                //println!("address 1 {:04x}", pattern_address_1);
-                //println!("---------------------");
 
                 for n in (0..8).rev() {
                     let bit_0 = get_u8_bit(pattern_byte_0, n);

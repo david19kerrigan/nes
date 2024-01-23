@@ -82,16 +82,16 @@ impl Testing {
         }
     }
     pub fn test_log(&mut self, cpu: &mut Cpu, ppu: &mut Ppu) {
-        println!("x {:0x}", cpu.x);
-        println!("y {:0x}", cpu.y);
-        println!("a {:0x}", cpu.a);
-        println!("p {:0b}", cpu.flags_to_byte());
-        println!("pc {:0x}", cpu.pc);
-        println!("cyc {}", self.cyc);
-        println!("instr {:?}", cpu.instr);
-        println!("addr {:?}", cpu.addr);
-        println!("ppu line cycle {} {}", ppu.line, ppu.cycle);
-        println!("--------");
+        //println!("x {:0x}", cpu.x);
+        //println!("y {:0x}", cpu.y);
+        //println!("a {:0x}", cpu.a);
+        //println!("p {:0b}", cpu.flags_to_byte());
+        //println!("pc {:0x}", cpu.pc);
+        //println!("cyc {}", self.cyc);
+        //println!("instr {:?}", cpu.instr);
+        //println!("addr {:?}", cpu.addr);
+        //println!("ppu line cycle {} {}", ppu.line, ppu.cycle);
+        //println!("--------");
 
         if self.has_passed_double_vblank {
             let line = self.records.next().unwrap().unwrap();
@@ -103,13 +103,13 @@ impl Testing {
             let true_y = u8::from_str_radix(&line[LINE_Y], 16).unwrap();
             let true_pc = u16::from_str_radix(&line[LINE_PC], 16).unwrap();
 
-            println!("true x {:0x}", true_x);
-            println!("true y {:0x}", true_y);
-            println!("true a {:0x}", true_a);
-            println!("true p {:0b}", true_p);
-            println!("true pc {:0x}", true_pc);
-            println!("true cyc {}", true_cyc);
-            println!("------------------------");
+            //println!("true x {:0x}", true_x);
+            //println!("true y {:0x}", true_y);
+            //println!("true a {:0x}", true_a);
+            //println!("true p {:0b}", true_p);
+            //println!("true pc {:0x}", true_pc);
+            //println!("true cyc {}", true_cyc);
+            //println!("------------------------");
 
             //check_attribute(cpu.x == true_x, "x");
             //check_attribute(cpu.y == true_y, "y");
