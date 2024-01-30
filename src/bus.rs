@@ -37,7 +37,7 @@ impl Bus {
                     self.cpu_memory[0xC000 + i - 0x10] = rom[i];
                 }
                 for i in 0x4010..0x6010 {
-                    self.ppu_memory[0 + i - 0x4000] = rom[i];
+                    self.ppu_memory[0 + i - 0x4010] = rom[i];
                 }
             }
             _ => panic!("unrecognized mapper"),

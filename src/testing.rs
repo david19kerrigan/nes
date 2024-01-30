@@ -82,26 +82,26 @@ impl Testing {
         }
     }
     pub fn test_log(&mut self, cpu: &mut Cpu, ppu: &mut Ppu) {
-        //println!("x {:0x}", cpu.x);
-        //println!("y {:0x}", cpu.y);
-        //println!("a {:0x}", cpu.a);
-        //println!("p {:0b}", cpu.flags_to_byte());
-        //println!("pc {:0x}", cpu.pc);
-        //println!("cyc {}", self.cyc);
-        //println!("instr {:?}", cpu.instr);
-        //println!("addr {:?}", cpu.addr);
-        //println!("ppu line cycle {} {}", ppu.line, ppu.cycle);
-        //println!("--------");
+        println!("x {:0x}", cpu.x);
+        println!("y {:0x}", cpu.y);
+        println!("a {:0x}", cpu.a);
+        println!("p {:0b}", cpu.flags_to_byte());
+        println!("pc {:0x}", cpu.pc);
+        println!("cyc {}", self.cyc);
+        println!("instr {:?}", cpu.instr);
+        println!("addr {:?}", cpu.addr);
+        println!("ppu line cycle {} {}", ppu.line, ppu.cycle);
+        println!("--------");
 
         if self.has_passed_double_vblank {
-            let line = self.records.next().unwrap().unwrap();
+            //let line = self.records.next().unwrap().unwrap();
 
-            let true_p = parse_processor_flags(&line[LINE_P]);
-            let true_cyc = u128::from_str_radix(&line[LINE_CYC], 10).unwrap();
-            let true_a = u8::from_str_radix(&line[LINE_A], 16).unwrap();
-            let true_x = u8::from_str_radix(&line[LINE_X], 16).unwrap();
-            let true_y = u8::from_str_radix(&line[LINE_Y], 16).unwrap();
-            let true_pc = u16::from_str_radix(&line[LINE_PC], 16).unwrap();
+            //let true_p = parse_processor_flags(&line[LINE_P]);
+            //let true_cyc = u128::from_str_radix(&line[LINE_CYC], 10).unwrap();
+            //let true_a = u8::from_str_radix(&line[LINE_A], 16).unwrap();
+            //let true_x = u8::from_str_radix(&line[LINE_X], 16).unwrap();
+            //let true_y = u8::from_str_radix(&line[LINE_Y], 16).unwrap();
+            //let true_pc = u16::from_str_radix(&line[LINE_PC], 16).unwrap();
 
             //println!("true x {:0x}", true_x);
             //println!("true y {:0x}", true_y);

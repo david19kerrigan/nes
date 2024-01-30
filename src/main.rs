@@ -30,6 +30,7 @@ fn main() {
     let mut cycles_frame: u128 = 0;
 
     bus.load_cartridge("/home/david/Downloads/dk.nes");
+    //bus.load_cartridge("/home/david/Documents/nes/src/testing/nestest.nes");
     cpu.Reset(&mut bus);
     let mut testing = Testing::new("/home/david/Documents/nes/src/testing/second_break/reset6.log");
 
@@ -111,7 +112,7 @@ fn main() {
             } else if cycles_left == 0 { // get a new instruction and wait for cycles_left
                 let (temp, p, sp, a, x, y, addr) = cpu.load_instruction(&mut bus);
                 cycles_left = temp;
-                testing.test_log(&mut cpu, &mut ppu);
+                //testing.test_log(&mut cpu, &mut ppu);
 				testing.cyc += cycles_left as u128;
                 cycles_frame += cycles_left as u128;
             }
