@@ -128,6 +128,8 @@ pub struct Ppu {
     pub mask: Mask,
     pub addr: u16,
     pub oam_addr: u16,
+    sprites: [u8; 8],
+    sprite_index: usize,
     v: u8,
     t: u8,
     x: u8,
@@ -146,6 +148,8 @@ impl Ppu {
             mask: Mask::new(),
             addr: 0,
             oam_addr: 0,
+            sprites: [0; 8],
+            sprite_index: 0,
             v: 0,
             t: 0,
             x: 0,
@@ -181,83 +185,145 @@ impl Ppu {
     pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) -> u8 {
         let mut cycles = 0;
         if self.line < 240 {
-			if self.cycle == 257 {
-				for n in 0..(self.oam.len() / 4) {
-					if self.line == self.oam[n * 4] as u16 {
-						let index = self.oam[n * 4 + 1];
-						let x = self.oam[n * 4 + 3];
-					}
-				}
-			}
-            if self.cycle >= 1 && self.cycle <= 256 && (self.cycle - 1) % 8 == 0 {
-                // --------------------- NAMETABLE -----------------------
-                let nametable_address = self.control.nametable_address
-                    + (((self.line + 1) / 8) * 32 + (self.cycle / 8));
-                let nametable_byte = bus.ppu_read_16(nametable_address);
-
-                let pattern_address_0 = (self.line + 1) % 8
-                    | (nametable_byte as u16) << 4
-                    | (self.control.background_address as u16) << 12;
-                let pattern_address_1 = pattern_address_0 | 1 << 3;
-
-                let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
-                let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
-
-                //println!("nametable_byte {:0x}", nametable_byte);
-                //println!("pattern_address {:0x}", pattern_address_0);
-
-                // --------------------- ATTRIBUTE TABLE -----------------------
-
-                let attribute_addr = (self.control.nametable_address + 0x3C0)
-                    + ((240 - self.line) / 32) * 8
-                    + (256 - self.cycle) / 32;
-                let attribute = bus.ppu_read_16(attribute_addr);
-                let top_left = attribute & 0b00000011;
-                let top_right = attribute >> 2 & 0b00000011;
-                let bottom_left = attribute >> 4 & 0b00000011;
-                let bottom_right = attribute >> 6 & 0b00000011;
-                let rel_x = self.cycle % 16;
-                let rel_y = self.line % 16;
-                let mut palette_offset = 0;
-
-                if rel_x <= 7 {
-                    if rel_y <= 7 {
-                        palette_offset = top_left * 4;
-                    } else if rel_y > 7 {
-                        palette_offset = bottom_left * 4;
-                    }
-                } else if rel_x > 7 {
-                    if rel_y <= 7 {
-                        palette_offset = top_right * 4;
-                    } else if rel_y > 7 {
-                        palette_offset = bottom_right * 4;
+			// --------------------- GET SPRITES FOR NEXT LINE -----------------------
+            if self.cycle == 257 {
+                while self.sprite_index > 0
+                    && self.oam[(self.sprites[self.sprite_index] * 4) as usize] + 8
+                        < self.line as u8
+                {
+                    self.sprite_index -= 1;
+                }
+                for n in 0..(self.oam.len() / 4) {
+                    if self.line == self.oam[n * 4] as u16 {
+                        let index = self.oam[n * 4 + 1];
+                        let x = self.oam[n * 4 + 3];
+                        if self.sprite_index == 7 {
+                            self.status.overflow = true;
+                            self.status.write(bus);
+                        } else {
+                            self.sprites[self.sprite_index] = n as u8;
+                            self.sprite_index += 1;
+                        }
                     }
                 }
+            }
+			// --------------------- DRAW SPRITES ON CURRENT LINE -----------------------
+            if self.cycle >= 1 && self.cycle <= 256 {
+				for n in 0..self.sprite_index {
+					let x = self.oam[n * 4 + 3];
+					let y = self.oam[n * 4];
+					if self.cycle as u8 >= x && self.cycle as u8 <= x + 7 && self.line as u8 <= y && self.line as u8 >= y {
+                        let tile = self.oam[n * 4 + 1];
+						let line = self.line as u8 - y;
 
-                let palette_color = 0x3F00 + palette_offset as u16;
+						let pattern_address_0 = (self.line + 1) % 8
+							| (tile as u16) << 4
+							| (self.control.background_address as u16) << 12;
+						let pattern_address_1 = pattern_address_0 | 1 << 3;
 
-                // --------------------- RENDERING -----------------------
+						let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
+						let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
 
-                for n in 0..8 {
-                    let bit_0 = get_u8_bit(pattern_byte_0, 7 - n);
-                    let bit_1 = get_u8_bit(pattern_byte_1, 7 - n);
-                    let sum = bit_1 << 1 | bit_0;
-                    if sum > 0 {
-                        let color = bus.ppu_read_16(palette_color + sum as u16);
-                        let hue = ((color & 0x0F) as f32 / 0x100 as f32) * 360.0;
-                        let brightness = ((color >> 4 & 0b00000011) as f32 / 0b100 as f32) * 100.0;
-                        let rgb_color = Hsl::from(hue, 100.0, brightness).to_rgb();
-                        canvas.set_draw_color(Color::RGB(
-                            rgb_color.get_red() as u8,
-                            rgb_color.get_green() as u8,
-                            rgb_color.get_blue() as u8,
-                        ));
+						let x_offset = self.cycle as u8 - x;
+                        let bit_0 = get_u8_bit(pattern_byte_0, 7 - x_offset);
+                        let bit_1 = get_u8_bit(pattern_byte_1, 7 - x_offset);
+                        let sum = bit_1 << 1 | bit_0;
 
-                        let point = Point::new((self.cycle + n as u16) as i32, self.line as i32);
-                        if self.mask.background {
-                            //canvas.draw_point(point);
+						let palette_color = 0x3F00 + (self.oam[n * 4 + 2] & 0b00000011) as u16;
+
+                        if sum > 0 {
+                            let color = bus.ppu_read_16(palette_color + sum as u16);
+                            let hue = ((color & 0x0F) as f32 / 0x100 as f32) * 360.0;
+                            let brightness =
+                                ((color >> 4 & 0b00000011) as f32 / 0b100 as f32) * 100.0;
+                            let rgb_color = Hsl::from(hue, 100.0, brightness).to_rgb();
+                            canvas.set_draw_color(Color::RGB(
+                                rgb_color.get_red() as u8,
+                                rgb_color.get_green() as u8,
+                                rgb_color.get_blue() as u8,
+                            ));
+
+                            let point =
+                                Point::new((self.cycle + n as u16) as i32, self.line as i32);
+                            if self.mask.background {
+                                //canvas.draw_point(point);
+                            }
+                            canvas.draw_point(point);
                         }
-                        canvas.draw_point(point);
+					}
+				}
+                if (self.cycle - 1) % 8 == 0 {
+                    // --------------------- NAMETABLE -----------------------
+                    let nametable_address = self.control.nametable_address
+                        + (((self.line + 1) / 8) * 32 + (self.cycle / 8));
+                    let nametable_byte = bus.ppu_read_16(nametable_address);
+
+                    let pattern_address_0 = (self.line + 1) % 8
+                        | (nametable_byte as u16) << 4
+                        | (self.control.background_address as u16) << 12;
+                    let pattern_address_1 = pattern_address_0 | 1 << 3;
+
+                    let pattern_byte_0 = bus.ppu_read_16(pattern_address_0);
+                    let pattern_byte_1 = bus.ppu_read_16(pattern_address_1);
+
+                    //println!("nametable_byte {:0x}", nametable_byte);
+                    //println!("pattern_address {:0x}", pattern_address_0);
+
+                    // --------------------- ATTRIBUTE TABLE -----------------------
+
+                    let attribute_addr = (self.control.nametable_address + 0x3C0)
+                        + ((240 - self.line) / 32) * 8
+                        + (256 - self.cycle) / 32;
+                    let attribute = bus.ppu_read_16(attribute_addr);
+                    let top_left = attribute & 0b00000011;
+                    let top_right = attribute >> 2 & 0b00000011;
+                    let bottom_left = attribute >> 4 & 0b00000011;
+                    let bottom_right = attribute >> 6 & 0b00000011;
+                    let rel_x = self.cycle % 16;
+                    let rel_y = self.line % 16;
+                    let mut palette_offset = 0;
+
+                    if rel_x <= 7 {
+                        if rel_y <= 7 {
+                            palette_offset = top_left * 4;
+                        } else if rel_y > 7 {
+                            palette_offset = bottom_left * 4;
+                        }
+                    } else if rel_x > 7 {
+                        if rel_y <= 7 {
+                            palette_offset = top_right * 4;
+                        } else if rel_y > 7 {
+                            palette_offset = bottom_right * 4;
+                        }
+                    }
+
+                    let palette_color = 0x3F00 + palette_offset as u16;
+
+                    // --------------------- RENDERING -----------------------
+
+                    for n in 0..8 {
+                        let bit_0 = get_u8_bit(pattern_byte_0, 7 - n);
+                        let bit_1 = get_u8_bit(pattern_byte_1, 7 - n);
+                        let sum = bit_1 << 1 | bit_0;
+                        if sum > 0 {
+                            let color = bus.ppu_read_16(palette_color + sum as u16);
+                            let hue = ((color & 0x0F) as f32 / 0x100 as f32) * 360.0;
+                            let brightness =
+                                ((color >> 4 & 0b00000011) as f32 / 0b100 as f32) * 100.0;
+                            let rgb_color = Hsl::from(hue, 100.0, brightness).to_rgb();
+                            canvas.set_draw_color(Color::RGB(
+                                rgb_color.get_red() as u8,
+                                rgb_color.get_green() as u8,
+                                rgb_color.get_blue() as u8,
+                            ));
+
+                            let point =
+                                Point::new((self.cycle + n as u16) as i32, self.line as i32);
+                            if self.mask.background {
+                                //canvas.draw_point(point);
+                            }
+                            canvas.draw_point(point);
+                        }
                     }
                 }
             }
