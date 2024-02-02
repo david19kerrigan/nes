@@ -334,21 +334,23 @@ impl Ppu {
                             PALETTE_ADDRESS + (self.oam[n * 4 + 2] & 0b00000011) as u16;
                         let x_offset = self.cycle as u8 - x;
 
-                        if self.control.sprite_size == 1 {
-                            let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
-                                bus,
-                                tile >> 1 << 1,
-                                line as u16,
-                                get_u8_bit(tile, 0),
-                            );
-                            self.draw_tile(
-                                bus,
-                                canvas,
-                                pattern_byte_0,
-                                pattern_byte_1,
-                                x_offset,
-                                palette_color,
-                            );
+                        if self.control.sprite_size == 0 {
+                            for i in 0..1 {
+                                let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
+                                    bus,
+                                    tile >> 1 << 1 + i,
+                                    line as u16,
+                                    get_u8_bit(tile, 0),
+                                );
+                                self.draw_tile(
+                                    bus,
+                                    canvas,
+                                    pattern_byte_0,
+                                    pattern_byte_1,
+                                    x_offset,
+                                    palette_color,
+                                );
+                            }
 
                             self.line += 8;
                             let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
