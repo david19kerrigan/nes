@@ -207,7 +207,8 @@ impl Ppu {
         pattern_byte_1: u8,
         n: u8,
         palette_color: u16,
-    ) {
+        use_offset: bool,
+    ) -> bool {
         let bit_0 = get_u8_bit(pattern_byte_0, 7 - n);
         let bit_1 = get_u8_bit(pattern_byte_1, 7 - n);
         let sum = bit_1 << 1 | bit_0;
@@ -222,29 +223,36 @@ impl Ppu {
                 rgb_color.get_blue() as u8,
             ));
 
-            let point = Point::new((self.cycle + n as u16) as i32, self.line as i32);
+            let point = Point::new(
+                (self.cycle + if use_offset { n } else { 0 } as u16) as i32,
+                self.line as i32,
+            );
             if self.mask.background {
                 //canvas.draw_point(point);
             }
             canvas.draw_point(point);
+            return true;
         }
+        false
     }
 
     pub fn tick(&mut self, bus: &mut Bus, canvas: &mut Canvas<Window>, cpu: &mut Cpu) -> u8 {
         let mut cycles = 0;
+        let mut sprite_0_draw = false;
+        let mut background_draw = false;
         if self.line < 240 {
             // --------------------- GET SPRITES FOR NEXT LINE -----------------------
             if self.cycle == 257 {
                 while self.sprite_index > 0
                     && self.line >= 8
-                    && self.oam[(self.sprites[self.sprite_index] * 4) as usize]
+                    && self.oam[(self.sprites[self.sprite_index - 1] * 4) as usize]
                         < (self.line - 8) as u8
                 {
                     self.sprite_index -= 1;
                 }
                 for n in 0..(self.oam.len() / 4) {
-                    if self.line == self.oam[n * 4] as u16 {
-                        if self.sprite_index == 7 {
+                    if self.line + 1 == self.oam[n * 4] as u16 {
+                        if self.sprite_index == 8 {
                             self.status.overflow = true;
                             self.status.write(bus);
                         } else {
@@ -255,71 +263,70 @@ impl Ppu {
                 }
             }
             if self.cycle >= 1 && self.cycle <= 256 {
-                if (self.cycle - 1) % 8 == 0 {
-                    // --------------------- NAMETABLE -----------------------
-                    let nametable_address = self.control.nametable_address
-                        + (((self.line + 1) / 8) * 32 + (self.cycle / 8));
-                    let nametable_byte = bus.ppu_read_16(nametable_address);
+                let n = (self.cycle) % 8;
+                // --------------------- NAMETABLE -----------------------
+                let nametable_address = self.control.nametable_address
+                    + (((self.line + 1) / 8) * 32 + (self.cycle / 8));
+                let nametable_byte = bus.ppu_read_16(nametable_address);
 
-                    let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
-                        bus,
-                        nametable_byte,
-                        (self.line + 1) % 8,
-                        self.control.background_address,
-                    );
+                let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
+                    bus,
+                    nametable_byte,
+                    (self.line + 1) % 8,
+                    self.control.background_address,
+                );
 
-                    //println!("nametable_byte {:0x}", nametable_byte);
-                    //println!("pattern_address {:0x}", pattern_address_0);
+                //println!("nametable_byte {:0x}", nametable_byte);
+                //println!("pattern_address {:0x}", pattern_address_0);
 
-                    // --------------------- ATTRIBUTE TABLE -----------------------
+                // --------------------- ATTRIBUTE TABLE -----------------------
 
-                    let attribute = bus.ppu_read_16(
-                        (self.control.nametable_address + 0x3C0)
-                            + ((240 - self.line) / 32) * 8
-                            + (256 - self.cycle) / 32,
-                    );
+                let attribute = bus.ppu_read_16(
+                    (self.control.nametable_address + 0x3C0)
+                        + ((240 - self.line) / 32) * 8
+                        + (256 - self.cycle) / 32,
+                );
 
-                    let top_left = attribute & 0b00000011;
-                    let top_right = attribute >> 2 & 0b00000011;
-                    let bottom_left = attribute >> 4 & 0b00000011;
-                    let bottom_right = attribute >> 6 & 0b00000011;
+                let top_left = attribute & 0b00000011;
+                let top_right = attribute >> 2 & 0b00000011;
+                let bottom_left = attribute >> 4 & 0b00000011;
+                let bottom_right = attribute >> 6 & 0b00000011;
 
-                    let rel_x = self.cycle % 16;
-                    let rel_y = self.line % 16;
-                    let mut palette_offset = 0;
+                let rel_x = self.cycle % 16;
+                let rel_y = self.line % 16;
+                let mut palette_offset = 0;
 
-                    if rel_x <= 7 {
-                        if rel_y <= 7 {
-                            palette_offset = top_left * 4;
-                        } else if rel_y > 7 {
-                            palette_offset = bottom_left * 4;
-                        }
-                    } else if rel_x > 7 {
-                        if rel_y <= 7 {
-                            palette_offset = top_right * 4;
-                        } else if rel_y > 7 {
-                            palette_offset = bottom_right * 4;
-                        }
+                if rel_x <= 7 {
+                    if rel_y <= 7 {
+                        palette_offset = top_left * 4;
+                    } else if rel_y > 7 {
+                        palette_offset = bottom_left * 4;
                     }
-
-                    let palette_color = PALETTE_ADDRESS + palette_offset as u16;
-
-                    // --------------------- DRAW BACKGROUND -----------------------
-
-                    for n in 0..8 {
-                        self.draw_tile(
-                            bus,
-                            canvas,
-                            pattern_byte_0,
-                            pattern_byte_1,
-                            n,
-                            palette_color,
-                        );
+                } else if rel_x > 7 {
+                    if rel_y <= 7 {
+                        palette_offset = top_right * 4;
+                    } else if rel_y > 7 {
+                        palette_offset = bottom_right * 4;
                     }
                 }
 
+                let palette_color = PALETTE_ADDRESS + palette_offset as u16;
+
+                // --------------------- DRAW BACKGROUND -----------------------
+
+                let background_draw = self.draw_tile(
+                    bus,
+                    canvas,
+                    pattern_byte_0,
+                    pattern_byte_1,
+                    n as u8,
+                    palette_color,
+                    false,
+                );
+
                 // --------------------- DRAW SPRITES ON CURRENT LINE -----------------------
-                for n in 0..self.sprite_index {
+                for j in 0..self.sprite_index {
+                    let n = self.sprites[j] as usize;
                     let x = self.oam[n * 4 + 3];
                     let y = self.oam[n * 4];
                     if self.cycle as u8 >= x
@@ -328,17 +335,23 @@ impl Ppu {
                         && self.line as u8 >= y
                     {
                         let tile = self.oam[n * 4 + 1];
+                        let attr = self.oam[n * 4 + 2];
                         let line = self.line as u8 - y;
 
-                        let palette_color =
-                            PALETTE_ADDRESS + (self.oam[n * 4 + 2] & 0b00000011) as u16;
-                        let x_offset = self.cycle as u8 - x;
+                        let flip_hor = get_u8_bit(attr, 6) == 1;
+                        let flip_ver = get_u8_bit(attr, 7) == 1;
 
-                        if self.control.sprite_size == 0 {
-                            for i in 0..1 {
+                        let palette_color = PALETTE_ADDRESS + (attr & 0b00000011) as u16;
+                        let mut x_offset = self.cycle as u8 - x;
+                        if flip_hor {
+                            x_offset = 7 - x_offset;
+                        }
+
+                        if self.control.sprite_size == 1 {
+                            for i in 0..2 {
                                 let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
                                     bus,
-                                    tile >> 1 << 1 + i,
+                                    (tile >> 1 << 1) + i,
                                     line as u16,
                                     get_u8_bit(tile, 0),
                                 );
@@ -349,25 +362,11 @@ impl Ppu {
                                     pattern_byte_1,
                                     x_offset,
                                     palette_color,
+                                    false,
                                 );
+                                self.line += 7;
                             }
-
-                            self.line += 8;
-                            let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
-                                bus,
-                                (tile >> 1 << 1) + 1,
-                                line as u16,
-                                get_u8_bit(tile, 0),
-                            );
-                            self.draw_tile(
-                                bus,
-                                canvas,
-                                pattern_byte_0,
-                                pattern_byte_1,
-                                x_offset,
-                                palette_color,
-                            );
-                            self.line -= 8;
+                            self.line -= 14;
                         } else {
                             let (pattern_byte_0, pattern_byte_1) = self.get_pattern_address(
                                 bus,
@@ -375,14 +374,21 @@ impl Ppu {
                                 line as u16,
                                 self.control.sprite_address,
                             );
-                            self.draw_tile(
+                            let drew = self.draw_tile(
                                 bus,
                                 canvas,
                                 pattern_byte_0,
                                 pattern_byte_1,
                                 x_offset,
                                 palette_color,
+                                false,
                             );
+                            {
+                                if drew && n == 0 && background_draw {
+                                    self.status.hit = true;
+                                    self.status.write(bus);
+                                }
+                            }
                         }
                     }
                 }

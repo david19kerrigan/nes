@@ -46,7 +46,7 @@ fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-	canvas.set_scale(2.0, 2.0);
+    canvas.set_scale(2.0, 2.0);
     canvas.clear();
     canvas.present();
 
@@ -73,53 +73,55 @@ fn main() {
                     keycode: Some(keycode),
                     ..
                 } => match keycode {
-                    Keycode::K => input |= 1 << 0,       // A
-                    Keycode::J => input |= 1 << 1,       // B
-                    Keycode::KpEnter => input |= 1 << 2, // Select
-                    Keycode::V => input |= 1 << 3,       // Start
-                    Keycode::W => input |= 1 << 4,       // Up
-                    Keycode::S => input |= 1 << 5,       // Down
-                    Keycode::A => input |= 1 << 6,       // Left
-                    Keycode::D => input |= 1 << 7,            // Right
+                    Keycode::K => input |= (1 << 0), // A
+                    Keycode::J => input |= (1 << 1), // B
+                    Keycode::B => input |= (1 << 2), // Select
+                    Keycode::V => input |= (1 << 3), // Start
+                    Keycode::W => input |= (1 << 4), // Up
+                    Keycode::S => input |= (1 << 5), // Down
+                    Keycode::A => input |= (1 << 6), // Left
+                    Keycode::D => input |= (1 << 7), // Right
                     _ => (),
                 },
                 Event::KeyUp {
                     keycode: Some(keycode),
                     ..
                 } => match keycode {
-                    Keycode::K => input &= 0 << 0,       // A
-                    Keycode::J => input &= 0 << 1,       // B
-                    Keycode::KpEnter => input &= 0 << 2, // Select
-                    Keycode::V => input &= 0 << 3,       // Start
-                    Keycode::W => input &= 0 << 4,       // Up
-                    Keycode::S => input &= 0 << 5,       // Down
-                    Keycode::A => input &= 0 << 6,       // Left
-                    Keycode::D => input &= 0 << 7,            // Right
+                    Keycode::K => input &= (1 << 0) ^ 0xFF, // A
+                    Keycode::J => input &= (1 << 1) ^ 0xFF, // B
+                    Keycode::B => input &= (1 << 2) ^ 0xFF, // Select
+                    Keycode::V => input &= (1 << 3) ^ 0xFF, // Start
+                    Keycode::W => input &= (1 << 4) ^ 0xFF, // Up
+                    Keycode::S => input &= (1 << 5) ^ 0xFF, // Down
+                    Keycode::A => input &= (1 << 6) ^ 0xFF, // Left
+                    Keycode::D => input &= (1 << 7) ^ 0xFF, // Right
                     _ => (),
                 },
                 _ => (),
             }
         }
 
-		bus.input = input;
+        bus.input = input;
 
         // --------------- Instructions ------------------
 
         while cycles_frame < 29780 {
-            if cycles_left == 1 { // on the final cycle -> execute the previous instruction
+            if cycles_left == 1 {
+                // on the final cycle -> execute the previous instruction
                 cpu.execute_instruction(&mut bus, &mut ppu);
                 testing.check_vblank(&mut bus, &mut cpu);
-            } else if cycles_left == 0 { // get a new instruction and wait for cycles_left
+            } else if cycles_left == 0 {
+                // get a new instruction and wait for cycles_left
                 let (temp, p, sp, a, x, y, addr) = cpu.load_instruction(&mut bus);
                 cycles_left = temp;
                 //testing.test_log(&mut cpu, &mut ppu);
-				testing.cyc += cycles_left as u128;
+                testing.cyc += cycles_left as u128;
                 cycles_frame += cycles_left as u128;
             }
             for m in 0..3 {
                 let temp = ppu.tick(&mut bus, &mut canvas, &mut cpu);
-				cycles_left += temp;
-				testing.cyc += temp as u128;
+                cycles_left += temp;
+                testing.cyc += temp as u128;
             }
             cycles_left -= 1;
         }

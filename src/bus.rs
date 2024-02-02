@@ -8,7 +8,8 @@ const ppu_memory_size: usize = 0x4000;
 pub struct Bus {
     pub cpu_memory: [u8; cpu_memory_size + 1],
     pub ppu_memory: [u8; ppu_memory_size + 1],
-	pub input: u8,
+    pub input: u8,
+    pub polling: bool,
 }
 
 impl Bus {
@@ -16,7 +17,8 @@ impl Bus {
         Bus {
             cpu_memory: [0; cpu_memory_size + 1],
             ppu_memory: [0; ppu_memory_size + 1],
-			input: 0,
+            input: 0,
+            polling: false,
         }
     }
 
@@ -65,10 +67,15 @@ impl Bus {
     pub fn cpu_write_16(&mut self, addr: u16, val: u8) {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
-		if addr == INPUT {
-			self.cpu_memory[INPUT as usize]  = self.input;
-			return
-		}
+        if addr == INPUT {
+            if val == 1 {
+                self.polling = true;
+                self.cpu_memory[INPUT as usize] = self.input;
+            } else if val == 0 {
+                self.polling = false;
+            }
+            return;
+        }
         self.cpu_memory[u_addr] = val;
     }
 
@@ -119,7 +126,7 @@ impl Bus {
     pub fn cpu_read_16_ppu_regs(&mut self, addr: u16, ppu: &mut Ppu) -> u8 {
         let u_addr = addr as usize;
         let mut_addr = self.cpu_ppu_reg_addr_map(addr) as usize;
-		let mut temp = self.cpu_read_16(mut_addr as u16);
+        let mut temp = self.cpu_read_16(mut_addr as u16);
 
         if mut_addr == (STATUS as usize) {
             self.cpu_memory[STATUS as usize] = set_u8_bit(self.cpu_memory[STATUS as usize], 7, 0);
@@ -134,11 +141,14 @@ impl Bus {
     pub fn cpu_read_16(&mut self, addr: u16) -> u8 {
         let u_addr = addr as usize;
         self.cpu_check_addr_in_range(u_addr);
-		let ret = self.cpu_memory[u_addr].clone();
-		if addr == INPUT {
-			self.cpu_memory[u_addr] >>= 1;
-		}
-		ret
+        let mut ret = self.cpu_memory[u_addr].clone();
+        if addr == INPUT {
+			ret &= 0x01;
+			if !self.polling {
+				self.cpu_memory[u_addr] >>= 1;
+			}
+        }
+        ret
     }
 
     // Read one byte in relation to the PC
@@ -167,7 +177,9 @@ impl Bus {
             return 1;
         }
         let high = self.cpu_read_8(high_addr);
-        (combine_low_high(low, high) as u8).overflowing_add(offset as u8).1 as u8
+        (combine_low_high(low, high) as u8)
+            .overflowing_add(offset as u8)
+            .1 as u8
     }
 
     // Does addressing mode Indexed X cross the page?
