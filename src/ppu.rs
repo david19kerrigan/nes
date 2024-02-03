@@ -330,7 +330,7 @@ impl Ppu {
                     let x = self.oam[n * 4 + 3];
                     let y = self.oam[n * 4];
                     if self.cycle as u8 >= x
-                        && self.cycle as u8 <= x + 7
+                        && self.cycle as u8 <= x.wrapping_add(7)
                         && self.line as u8 <= y.wrapping_add(7)
                         && self.line as u8 >= y
                     {

@@ -40,13 +40,13 @@ fn main() {
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("game", 256 * 2, 240 * 2)
+        .window("game", 256 * 3, 240 * 3)
         .position_centered()
         .build()
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_scale(2.0, 2.0);
+    canvas.set_scale(3.0, 3.0);
     canvas.clear();
     canvas.present();
 
